@@ -9,13 +9,23 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.78",
+    "@ai-sdk/google": "^3.0.78",
+    "@ai-sdk/groq": "^3.0.39",
+    "@ai-sdk/react": "^3.0.191",
+    "@octokit/rest": "^22.0.1",
+    "ai": "^6.0.189",
+    "drizzle-orm": "^0.45.2",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "redis": "^5.12.1",
+    "shiki": "^4.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.12.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
