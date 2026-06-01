@@ -21,6 +21,27 @@ export type PRFile = {
   previous_filename: string | null;
 };
 
+export type PRFileSummary = Pick<
+  PRFile,
+  | "filename"
+  | "status"
+  | "additions"
+  | "deletions"
+  | "changes"
+  | "previous_filename"
+>;
+
+export function toPRFileSummary(f: PRFile): PRFileSummary {
+  return {
+    filename: f.filename,
+    status: f.status,
+    additions: f.additions,
+    deletions: f.deletions,
+    changes: f.changes,
+    previous_filename: f.previous_filename,
+  };
+}
+
 export async function getPRFiles(
   client: Octokit,
   ref: PRRef,

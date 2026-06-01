@@ -1,7 +1,13 @@
 import { Octokit } from "@octokit/rest";
 import type { PRRef } from "../parse-url";
 import { getPRMetadata, type PRMetadata } from "./get-pr-metadata";
-import { getPRFiles, type PRFile, type PRFileStatus } from "./get-pr-files";
+import {
+  getPRFiles,
+  toPRFileSummary,
+  type PRFile,
+  type PRFileStatus,
+  type PRFileSummary,
+} from "./get-pr-files";
 import { getFileContents, type FileContents } from "./get-file-contents";
 import {
   listDirectory,
@@ -13,6 +19,7 @@ export type {
   PRMetadata,
   PRFile,
   PRFileStatus,
+  PRFileSummary,
   FileContents,
   DirectoryEntry,
   DirectoryEntryType,
@@ -28,8 +35,8 @@ export {
 
 export type GithubAccess = {
   getPRMetadata: () => Promise<PRMetadata>;
-  getPRFiles: () => Promise<PRFile[]>;
-  getFile: (filename: string) => Promise<PRFile | null>;
+  getPRFiles: () => Promise<PRFileSummary[]>;
+  getFile: (filename: string) => Promise<PRFileSummary | null>;
   getDiff: (filename: string) => Promise<string | null>;
   getFileContents: (params: {
     path: string;
@@ -60,7 +67,7 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
   const ensureFiles = (): Promise<Map<string, PRFile>> => {
     if (!filesPromise) {
       filesPromise = getPRFiles(client, pr).then(
-        (arr) => new Map(arr.map((f) => [f.filename, f])),
+        (arr) => new Map(arr.map((f) => [f.filename, f]))
       );
     }
     return filesPromise;
@@ -68,9 +75,12 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
 
   return {
     getPRMetadata: () => ensureMetadata(),
-    getPRFiles: async () => [...(await ensureFiles()).values()],
-    getFile: async (filename) =>
-      (await ensureFiles()).get(filename) ?? null,
+    getPRFiles: async () =>
+      [...(await ensureFiles()).values()].map(toPRFileSummary),
+    getFile: async (filename) => {
+      const file = (await ensureFiles()).get(filename);
+      return file ? toPRFileSummary(file) : null;
+    },
     getDiff: async (filename) =>
       (await ensureFiles()).get(filename)?.patch ?? null,
     getFileContents: ({ path, ref }) =>
