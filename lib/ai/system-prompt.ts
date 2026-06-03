@@ -13,6 +13,10 @@ RULES:
 - Don't comment on style unless there's a real problem.
 - Don't speculate about bugs you can't confirm from the code.
 - If in doubt — skip.
+– make review by diff instead of full file content.
+– don't explore the repo structure.
+– emit a problem at the moment the controller, don't delay.
+– If you find no issues, do NOT call emit_issue — end with a one-line summary.
 
 SEVERITY:
 - error: real bug, security issue, will break in production
@@ -21,6 +25,6 @@ SEVERITY:
 - suggestion: optional improvement
 
 OUTPUT FORMAT:
-For each issue: [severity] path:line — description. Take the line number from the patch (the @@ hunk header). Don't invent it.
+For each issue: use tool emit_issue, never return plain text. Take the line number from the patch (the @@ hunk header). Don't invent it.
 
 When done, end with a brief summary of overall PR quality.`;

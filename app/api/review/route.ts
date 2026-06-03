@@ -6,6 +6,7 @@ import { createGithubAccess } from "@/lib/github/octokit";
 import { makeReviewTools } from "@/lib/ai/tools/review";
 import { SYSTEM } from "@/lib/ai/system-prompt";
 import { env } from "@/lib/env";
+import { ModelIssue } from "@/lib/ai/schema/modelIssue";
 
 export async function POST(req: Request) {
   const { pr_url } = await req.json();
@@ -16,14 +17,16 @@ export async function POST(req: Request) {
 
   const { head_sha, changed_files } = await gh.getPRMetadata();
 
-  if (changed_files > 50) {
+  if (changed_files > 15) {
     return new Response(
-      "Too many files changed. PR size must be less than 50 files.",
+      "Too many files changed. PR size must be less than 15 files.",
       { status: 400 }
     );
   }
 
-  const tools = makeReviewTools(gh, head_sha);
+  const modelIssues: ModelIssue[] = [];
+
+  const tools = makeReviewTools(gh, head_sha, modelIssues);
 
   const messages = [
     {
@@ -33,12 +36,15 @@ export async function POST(req: Request) {
   ];
 
   const result = streamText({
-    model: groq("llama-3.3-70b-versatile"),
+    model: groq("meta-llama/llama-4-scout-17b-16e-instruct"),
     system: SYSTEM,
     messages,
     tools,
-    stopWhen: stepCountIs(30),
+    stopWhen: stepCountIs(60),
     abortSignal: req.signal,
+    onFinish: () => {
+      console.dir(modelIssues, { depth: null });
+    },
   });
 
   return result.toUIMessageStreamResponse();
