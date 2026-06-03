@@ -6,8 +6,13 @@ import {
 import { tool } from "ai";
 import { z } from "zod";
 import { truncateBody } from "./utils";
+import { modelIssueSchema, ModelIssue } from "../schema/modelIssue";
 
-export function makeReviewTools(gh: GithubAccess, ref: string) {
+export function makeReviewTools(
+  gh: GithubAccess,
+  ref: string,
+  modelIssues: ModelIssue[]
+) {
   return {
     get_pr_metadata: tool({
       description: `Start here to understand the PR's intent and scope before reading diffs. Fields it returns: 
@@ -86,6 +91,7 @@ no_patch – skip the file.`,
     get_file_contents: tool({
       description: `Returns the full content of a single file at the PR's head state. Use it when the diff alone isn't enough to judge a change – e.g., to see how a changed function is defined or used elsewhere in the file. Returns { content, size } in the success case. Returns {status, reason} if there is a problem:
 not_found – the file doesn't exist at the PR head (e.g., deleted in this PR) or the path may be wrong – check get_pr_files_summary for valid paths;
+too_large – read file via get_diff, whole file can't be fetched;
 unavailable – couldn't read the file; see reason (e.g., too large, or the path is a directory).`,
       inputSchema: z.object({
         path: z.string(),
@@ -95,6 +101,10 @@ unavailable – couldn't read the file; see reason (e.g., too large, or the path
 
         try {
           const { content, size } = await gh.getFileContents({ path, ref });
+
+          if (size > 9_000) {
+            return { status: "too_large" };
+          }
 
           return { content, size };
         } catch (e) {
@@ -133,6 +143,15 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
             return { status: "unavailable", reason: e.message };
           throw e;
         }
+      },
+    }),
+    emit_issue: tool({
+      description:
+        "Report a single code-review issue you found in this PR. Call it once per issue, the moment you have confirmed a problem — do not batch issues for the end, and never write issues as plain text. You provide the location (file + line range) and the explanation; the code snippet is added by the backend, so do not send code",
+      inputSchema: modelIssueSchema,
+      execute: (input) => {
+        modelIssues.push(input);
+        return { ok: true };
       },
     }),
   };

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const EnvSchema = z.object({
   GITHUB_PAT: z.string().min(1),
-  // CEREBRAS_API_KEY: z.string().min(1),
+  CEREBRAS_API_KEY: z.string().min(1),
   GROQ_API_KEY: z.string().min(1).optional(),
   // GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
 });
