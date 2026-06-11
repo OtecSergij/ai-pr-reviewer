@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  ReviewChunkType,
-  type IssuePayload,
-  type ReviewChunk,
-  type ReviewStatus,
-  type ToolActivity,
+import type {
+  IssuePayload,
+  ReviewChunk,
+  ReviewStatus,
+  ToolActivity,
 } from "./types";
 
 export function useReview() {
@@ -93,19 +92,19 @@ export function useReview() {
           }
 
           switch (chunk.type) {
-            case ReviewChunkType.TOOL_INPUT_AVAILABLE:
+            case "tool-input-available":
               setActivity({ toolName: chunk.toolName, input: chunk.input });
               break;
 
-            case ReviewChunkType.DATA_ISSUE:
+            case "data-issue":
               setIssues((issues) => [...issues, chunk.data]);
               break;
 
-            case ReviewChunkType.TEXT_DELTA:
+            case "text-delta":
               pushText(chunk.delta);
               break;
 
-            case ReviewChunkType.TEXT_START:
+            case "text-start":
               if (textRef.current) pushText("\n\n");
               break;
 
