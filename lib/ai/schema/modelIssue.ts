@@ -1,3 +1,4 @@
+import { UIMessage } from "ai";
 import { z } from "zod";
 
 export const modelIssueSchema = z
@@ -51,3 +52,15 @@ export const modelIssueSchema = z
   });
 
 export type ModelIssue = z.infer<typeof modelIssueSchema>;
+
+/**
+ * Имя data-канала issue — единая точка истины. От него строится ReviewUIMessage
+ * (тип writer'а на сервере) и компайл-скрепка enum'а чанков на клиенте
+ * (app/hooks/review/types.ts).
+ */
+export const ISSUE_DATA_KEY = "issue" as const;
+
+export type ReviewUIMessage = UIMessage<
+  never,
+  { [K in typeof ISSUE_DATA_KEY]: ModelIssue }
+>;

@@ -4,6 +4,8 @@ const EnvSchema = z.object({
   GITHUB_PAT: z.string().min(1),
   CEREBRAS_API_KEY: z.string().min(1),
   GROQ_API_KEY: z.string().min(1).optional(),
+  // ВРЕМЕННО (прогон темы 5): Sonnet 4.6 через AITunnel. Убрать при откате на groq.
+  AI_TUNNEL_API_KEY: z.string().min(1),
   // GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
 });
 

@@ -3,15 +3,21 @@ import {
   GitHubApiError,
   NotFoundError,
 } from "@/lib/github/octokit";
-import { tool } from "ai";
+import { tool, UIMessageStreamWriter } from "ai";
 import { z } from "zod";
 import { truncateBody } from "./utils";
-import { modelIssueSchema, ModelIssue } from "../schema/modelIssue";
+import {
+  modelIssueSchema,
+  ModelIssue,
+  ReviewUIMessage,
+} from "../schema/modelIssue";
+import type { ReviewToolName } from "./names";
 
 export function makeReviewTools(
   gh: GithubAccess,
   ref: string,
-  modelIssues: ModelIssue[]
+  modelIssues: ModelIssue[],
+  writer: UIMessageStreamWriter<ReviewUIMessage>
 ) {
   return {
     get_pr_metadata: tool({
@@ -151,8 +157,12 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
       inputSchema: modelIssueSchema,
       execute: (input) => {
         modelIssues.push(input);
+
+        writer.write({ type: "data-issue", data: input, transient: true });
         return { ok: true };
       },
     }),
-  };
+    // скрепка с lib/ai/tools/names.ts: переименование ключа тула только здесь
+    // (или только там) не скомпилируется
+  } satisfies Record<ReviewToolName, unknown>;
 }
