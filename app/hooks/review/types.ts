@@ -1,7 +1,8 @@
 import type { InferUIMessageChunk } from "ai";
-import type { ModelIssue, ReviewUIMessage } from "@/lib/ai/schema/modelIssue";
+import type { ReviewUIMessage } from "@/lib/ai/schema/review-stream";
+import type { IssueData } from "@/lib/issue";
 
-export type IssuePayload = ModelIssue;
+export type IssuePayload = IssueData;
 
 export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 

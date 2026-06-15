@@ -68,6 +68,9 @@ export function useReview() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      // Сбои после старта стрима приходят error-чанком внутри тела (HTTP уже
+      // 200) — фиксируем и не даём финальному setStatus("done") их затереть.
+      let streamError: string | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -108,13 +111,22 @@ export function useReview() {
               if (textRef.current) pushText("\n\n");
               break;
 
+            case "error":
+              streamError = chunk.errorText;
+              break;
+
             default:
               break;
           }
         }
       }
 
-      setStatus("done");
+      if (streamError) {
+        setError(streamError);
+        setStatus("error");
+      } else {
+        setStatus("done");
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setStatus("aborted");

@@ -56,6 +56,9 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
 
   let metadataPromise: Promise<PRMetadata> | null = null;
   let filesPromise: Promise<Map<string, PRFile>> | null = null;
+  // Кэш по `${ref}:${path}`: в агентном цикле модель может перечитать один файл
+  // на разных шагах — отдаём из кэша, как metadata/files. Дедуп HTTP в рамках ревью.
+  const fileContentsCache = new Map<string, Promise<FileContents>>();
 
   const ensureMetadata = (): Promise<PRMetadata> => {
     if (!metadataPromise) {
@@ -83,13 +86,20 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
     },
     getDiff: async (filename) =>
       (await ensureFiles()).get(filename)?.patch ?? null,
-    getFileContents: ({ path, ref }) =>
-      getFileContents(client, {
-        owner: pr.owner,
-        repo: pr.repo,
-        path,
-        ref,
-      }),
+    getFileContents: ({ path, ref }) => {
+      const key = `${ref}:${path}`;
+      let cached = fileContentsCache.get(key);
+      if (!cached) {
+        cached = getFileContents(client, {
+          owner: pr.owner,
+          repo: pr.repo,
+          path,
+          ref,
+        });
+        fileContentsCache.set(key, cached);
+      }
+      return cached;
+    },
     listDirectory: ({ path, ref }) =>
       listDirectory(client, {
         owner: pr.owner,

@@ -11,7 +11,8 @@ import { createGithubAccess } from "@/lib/github/octokit";
 import { makeReviewTools } from "@/lib/ai/tools/review";
 import { SYSTEM } from "@/lib/ai/system-prompt";
 import { env } from "@/lib/env";
-import { ModelIssue } from "@/lib/ai/schema/modelIssue";
+import { streamTextMock } from "@/lib/ai/mock/stream-text-mock";
+import type { IssueData } from "@/lib/issue";
 
 // ВРЕМЕННО (прогон темы 5): Sonnet 4.6 через AITunnel-прокси (нативный
 // Anthropic endpoint /v1/messages). Откат: import { groq } from "@ai-sdk/groq"
@@ -23,6 +24,11 @@ const anthropic = createAnthropic({
   // authToken шлёт его так; apiKey (x-api-key) они отвергают с 401.
   authToken: env.AI_TUNNEL_API_KEY,
 });
+
+// ВРЕМЕННО (итерации по UI): MOCK_REVIEW=1 подменяет streamText фикстурным
+// моком — LLM не вызывается, но тулзы (GitHub, emit_issue → data-issue)
+// отрабатывают по-настоящему. В форму вставлять MOCK_PR_URL из lib/ai/mock.
+const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
 
 export async function POST(req: Request) {
   const { pr_url } = await req.json();
@@ -40,7 +46,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const modelIssues: ModelIssue[] = [];
+  const UIIssues: Map<string, IssueData> = new Map();
 
   const messages = [
     {
@@ -49,11 +55,13 @@ export async function POST(req: Request) {
     },
   ];
 
+  const repo = { headSha: head_sha, owner: pr.owner, repo: pr.repo };
+
   const stream = createUIMessageStream({
     execute: ({ writer }) => {
-      const tools = makeReviewTools(gh, head_sha, modelIssues, writer);
+      const tools = makeReviewTools(gh, UIIssues, repo, writer);
 
-      const result = streamText({
+      const result = streamTextImpl({
         model: anthropic("claude-sonnet-4-6"),
         system: SYSTEM,
         messages,
@@ -65,7 +73,7 @@ export async function POST(req: Request) {
       writer.merge(result.toUIMessageStream());
     },
     onFinish: () => {
-      console.dir(modelIssues, { depth: null });
+      console.dir([...UIIssues.values()], { depth: null });
     },
   });
 
