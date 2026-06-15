@@ -25,6 +25,10 @@ const anthropic = createAnthropic({
   authToken: env.AI_TUNNEL_API_KEY,
 });
 
+// TODO(тема 8): динамический выбор провайдера/модели. Пока единая точка истины
+// для вызова модели и для лейбла в шапке UI (meta.model).
+const MODEL = "claude-sonnet-4-6";
+
 // ВРЕМЕННО (итерации по UI): MOCK_REVIEW=1 подменяет streamText фикстурным
 // моком — LLM не вызывается, но тулзы (GitHub, emit_issue → data-issue)
 // отрабатывают по-настоящему. В форму вставлять MOCK_PR_URL из lib/ai/mock.
@@ -37,7 +41,7 @@ export async function POST(req: Request) {
 
   const gh = createGithubAccess(env.GITHUB_PAT, pr);
 
-  const { head_sha, changed_files } = await gh.getPRMetadata();
+  const { head_sha, changed_files, title } = await gh.getPRMetadata();
 
   if (changed_files > 15) {
     return new Response(
@@ -58,11 +62,32 @@ export async function POST(req: Request) {
   const repo = { headSha: head_sha, owner: pr.owner, repo: pr.repo };
 
   const stream = createUIMessageStream({
-    execute: ({ writer }) => {
+    execute: async ({ writer }) => {
+      // Shell-данные (шапка + сайдбар) — в начале стрима, до агентного потока,
+      // чтобы воркспейс отрисовался сразу. getPRFiles кешируется (ensureFiles):
+      // модельный get_pr_files_summary переиспользует тот же запрос.
+      writer.write({
+        type: "data-meta",
+        data: {
+          owner: pr.owner,
+          repo: pr.repo,
+          pr_number: pr.pr_number,
+          title,
+          head_sha,
+          model: MODEL,
+        },
+        transient: true,
+      });
+      writer.write({
+        type: "data-files",
+        data: await gh.getPRFiles(),
+        transient: true,
+      });
+
       const tools = makeReviewTools(gh, UIIssues, repo, writer);
 
       const result = streamTextImpl({
-        model: anthropic("claude-sonnet-4-6"),
+        model: anthropic(MODEL),
         system: SYSTEM,
         messages,
         tools,

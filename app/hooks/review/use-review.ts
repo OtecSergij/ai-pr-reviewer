@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   IssuePayload,
+  PRFileSummary,
+  PRMeta,
   ReviewChunk,
   ReviewStatus,
   ToolActivity,
@@ -14,6 +16,8 @@ export function useReview() {
   const [activity, setActivity] = useState<ToolActivity | null>(null);
   const [agentText, setAgentText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<PRMeta | null>(null);
+  const [files, setFiles] = useState<PRFileSummary[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   const textRef = useRef("");
@@ -43,6 +47,8 @@ export function useReview() {
     setIssues([]);
     setActivity(null);
     setError(null);
+    setMeta(null);
+    setFiles([]);
     setStatus("running");
 
     const ac = new AbortController();
@@ -103,6 +109,14 @@ export function useReview() {
               setIssues((issues) => [...issues, chunk.data]);
               break;
 
+            case "data-meta":
+              setMeta(chunk.data);
+              break;
+
+            case "data-files":
+              setFiles(chunk.data);
+              break;
+
             case "text-delta":
               pushText(chunk.delta);
               break;
@@ -154,5 +168,5 @@ export function useReview() {
     []
   );
 
-  return { run, stop, status, issues, activity, error, agentText };
+  return { run, stop, status, issues, activity, error, agentText, meta, files };
 }
