@@ -1,6 +1,7 @@
 import { UIMessage } from "ai";
 import { z } from "zod";
 import type { IssueData } from "@/lib/issue";
+import type { PRFileSummary } from "@/lib/github/octokit";
 
 export const modelIssueSchema = z
   .object({
@@ -56,7 +57,23 @@ export type ModelIssue = z.infer<typeof modelIssueSchema>;
 
 export const ISSUE_DATA_KEY = "issue" as const;
 
+/**
+ * Метаданные PR для шапки/summary воркспейса — подмножество PRMetadata, только
+ * то, что рисует макет. Канал data-meta, шлётся один раз в начале стрима.
+ */
+export type PRMeta = {
+  owner: string;
+  repo: string;
+  pr_number: number;
+  title: string;
+  head_sha: string;
+  // TODO(тема 8): динамический provider/model вместо хардкода в route
+  model: string;
+};
+
 export type ReviewUIMessage = UIMessage<
   never,
-  { [K in typeof ISSUE_DATA_KEY]: IssueData }
+  { meta: PRMeta; files: PRFileSummary[] } & {
+    [K in typeof ISSUE_DATA_KEY]: IssueData;
+  }
 >;
