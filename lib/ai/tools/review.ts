@@ -3,20 +3,19 @@ import {
   GitHubApiError,
   NotFoundError,
 } from "@/lib/github/octokit";
+import type { IssueData } from "@/lib/issue";
 import { tool, UIMessageStreamWriter } from "ai";
 import { z } from "zod";
 import { truncateBody } from "./utils";
-import {
-  modelIssueSchema,
-  ModelIssue,
-  ReviewUIMessage,
-} from "../schema/modelIssue";
+import { modelIssueSchema, ReviewUIMessage } from "../schema/review-stream";
 import type { ReviewToolName } from "./names";
+import { enrichIssue } from "./enrich-issue";
+import type { RepoContext } from "@/lib/github/repo-context";
 
 export function makeReviewTools(
   gh: GithubAccess,
-  ref: string,
-  modelIssues: ModelIssue[],
+  UIIssues: Map<string, IssueData>,
+  repo: RepoContext,
   writer: UIMessageStreamWriter<ReviewUIMessage>
 ) {
   return {
@@ -106,7 +105,10 @@ unavailable – couldn't read the file; see reason (e.g., too large, or the path
         console.log("[tool]", "get_file_contents", { path });
 
         try {
-          const { content, size } = await gh.getFileContents({ path, ref });
+          const { content, size } = await gh.getFileContents({
+            path,
+            ref: repo.headSha,
+          });
 
           if (size > 9_000) {
             return { status: "too_large" };
@@ -135,7 +137,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
         console.log("[tool]", "list_directory", { path });
 
         try {
-          const entries = await gh.listDirectory({ path, ref });
+          const entries = await gh.listDirectory({ path, ref: repo.headSha });
 
           return {
             entries: entries.map(({ path, type }) => ({
@@ -153,16 +155,18 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
     }),
     emit_issue: tool({
       description:
-        "Report a single code-review issue you found in this PR. Call it once per issue, the moment you have confirmed a problem — do not batch issues for the end, and never write issues as plain text. You provide the location (file + line range) and the explanation; the code snippet is added by the backend, so do not send code",
+        "Report a single code-review issue you found in this PR. Call it once per issue, the moment you have confirmed a problem — do not batch issues for the end, and never write issues as plain text. You provide the location (file + line range) and the explanation; the code snippet is added by the backend, so do not send code. Reporting the same issue twice is safe — the repeat is ignored and the result has duplicate: true, so there is no need to resend it.",
       inputSchema: modelIssueSchema,
-      execute: (input) => {
-        modelIssues.push(input);
+      execute: async (input) => {
+        const data = await enrichIssue(gh, repo, input);
+        if (UIIssues.has(data.id)) {
+          return { ok: true, duplicate: true };
+        }
 
-        writer.write({ type: "data-issue", data: input, transient: true });
+        UIIssues.set(data.id, data);
+        writer.write({ type: "data-issue", data, transient: true });
         return { ok: true };
       },
     }),
-    // скрепка с lib/ai/tools/names.ts: переименование ключа тула только здесь
-    // (или только там) не скомпилируется
   } satisfies Record<ReviewToolName, unknown>;
 }
