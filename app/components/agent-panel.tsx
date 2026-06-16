@@ -1,11 +1,10 @@
 "use client";
 
 import { memo, useEffect, useRef, useState } from "react";
-import type { ToolActivity } from "@/app/hooks/review/types";
-import { REVIEW_TOOL_NAMES } from "@/lib/ai/tools/names";
+import type { ToolActivity } from "@/app/hooks/review/use-review";
+import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 
 type AgentPanelProps = {
-  /** Текущий тул — сырые toolName+input из хука; в строку превращаем здесь. */
   activity: ToolActivity | null;
   text: string;
   done: boolean;
@@ -80,8 +79,8 @@ export const AgentPanel = memo(function AgentPanel({
         {done && !typing
           ? "Готово"
           : activity
-            ? labelForTool(activity)
-            : "Думаю…"}
+          ? labelForTool(activity)
+          : "Думаю…"}
       </header>
       <div
         ref={bodyRef}

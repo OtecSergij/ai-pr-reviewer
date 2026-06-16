@@ -7,36 +7,36 @@ export type PRMetadata = {
   body: string | null;
   state: "open" | "closed";
   merged: boolean;
-  base_ref: string;
-  head_ref: string;
-  head_sha: string;
-  changed_files: number;
-  html_url: string;
+  baseRef: string;
+  headRef: string;
+  headSha: string;
+  changedFiles: number;
+  htmlUrl: string;
 };
 
 export async function getPRMetadata(
   client: Octokit,
   ref: PRRef,
 ): Promise<PRMetadata> {
-  const { owner, repo, pr_number } = ref;
+  const { owner, repo, prNumber } = ref;
   try {
     const { data } = await client.rest.pulls.get({
       owner,
       repo,
-      pull_number: pr_number,
+      pull_number: prNumber,
     });
     return {
       title: data.title,
       body: data.body,
       state: data.state,
       merged: data.merged ?? false,
-      base_ref: data.base.ref,
-      head_ref: data.head.ref,
-      head_sha: data.head.sha,
-      changed_files: data.changed_files,
-      html_url: data.html_url,
+      baseRef: data.base.ref,
+      headRef: data.head.ref,
+      headSha: data.head.sha,
+      changedFiles: data.changed_files,
+      htmlUrl: data.html_url,
     };
   } catch (err) {
-    translateOctokitError(err, `PR ${owner}/${repo}#${pr_number}`);
+    translateOctokitError(err, `PR ${owner}/${repo}#${prNumber}`);
   }
 }

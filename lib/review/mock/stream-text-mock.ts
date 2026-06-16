@@ -5,10 +5,11 @@ import type {
   ToolExecuteFunction,
 } from "ai";
 
-import { REVIEW_TOOL_NAMES } from "@/lib/ai/tools/names";
-import type { ReviewToolName } from "@/lib/ai/tools/names";
-import { modelIssueSchema } from "@/lib/ai/schema/review-stream";
-import type { ModelIssue, ReviewUIMessage } from "@/lib/ai/schema/review-stream";
+import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
+import type { ReviewToolName } from "@/lib/review/tools/tool-names";
+import { modelIssueSchema } from "@/lib/review/model-issue.schema";
+import type { ModelIssue } from "@/lib/review/model-issue.schema";
+import type { ReviewUIMessage } from "@/lib/review/stream";
 
 // Вставлять этот URL в форму при MOCK_REVIEW=1.
 // vercel/ms#35 — merged в 2014-м, 3 файла (index.js, test/test.js, README.md),

@@ -18,7 +18,7 @@ export type PRFile = {
   deletions: number;
   changes: number;
   patch: string | null;
-  previous_filename: string | null;
+  previousFilename: string | null;
 };
 
 export type PRFileSummary = Pick<
@@ -28,7 +28,7 @@ export type PRFileSummary = Pick<
   | "additions"
   | "deletions"
   | "changes"
-  | "previous_filename"
+  | "previousFilename"
 >;
 
 export function toPRFileSummary(f: PRFile): PRFileSummary {
@@ -38,20 +38,20 @@ export function toPRFileSummary(f: PRFile): PRFileSummary {
     additions: f.additions,
     deletions: f.deletions,
     changes: f.changes,
-    previous_filename: f.previous_filename,
+    previousFilename: f.previousFilename,
   };
 }
 
 export async function getPRFiles(
   client: Octokit,
-  ref: PRRef,
+  ref: PRRef
 ): Promise<PRFile[]> {
-  const { owner, repo, pr_number } = ref;
+  const { owner, repo, prNumber } = ref;
   try {
     const files = await client.paginate(client.rest.pulls.listFiles, {
       owner,
       repo,
-      pull_number: pr_number,
+      pull_number: prNumber,
       per_page: 100,
     });
     return files.map((f) => ({
@@ -61,9 +61,9 @@ export async function getPRFiles(
       deletions: f.deletions,
       changes: f.changes,
       patch: f.patch ?? null,
-      previous_filename: f.previous_filename ?? null,
+      previousFilename: f.previous_filename ?? null,
     }));
   } catch (err) {
-    translateOctokitError(err, `PR files ${owner}/${repo}#${pr_number}`);
+    translateOctokitError(err, `PR files ${owner}/${repo}#${prNumber}`);
   }
 }
