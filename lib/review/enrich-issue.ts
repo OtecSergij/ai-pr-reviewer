@@ -1,6 +1,6 @@
 import type { GithubAccess } from "@/lib/github/octokit";
-import type { ModelIssue } from "@/lib/ai/schema/review-stream";
-import type { IssueData, CodeLine } from "@/lib/issue";
+import type { ModelIssue } from "./model-issue.schema";
+import type { Issue, CodeLine } from "./issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 import { parseUnifiedDiff } from "@/lib/github/diff";
 import { createHash } from "node:crypto";
@@ -46,17 +46,19 @@ async function buildCodeLines(
     if (!patch) return [];
     return sliceFromDiff(patch, issue) ?? [];
   } catch (e) {
-    console.warn("[enrichIssue] code_lines → []:", issue.file, e);
+    console.warn("[enrichIssue] codeLines → []:", issue.file, e);
     return [];
   }
 }
 
+// Граница LLM → домен: на вход snake-поля ModelIssue (контракт модели),
+// на выходе доменный Issue в camelCase.
 export async function enrichIssue(
   gh: GithubAccess,
   repo: RepoContext,
   issue: ModelIssue
-): Promise<IssueData> {
-  const code_lines = await buildCodeLines(gh, issue);
+): Promise<Issue> {
+  const codeLines = await buildCodeLines(gh, issue);
 
   const id = createHash("sha256")
     .update(
@@ -71,11 +73,11 @@ export async function enrichIssue(
     body: issue.body,
     suggestion: issue.suggestion,
     file: issue.file,
-    line_start: issue.line_start,
-    line_end: issue.line_end,
-    blob_url: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
+    lineStart: issue.line_start,
+    lineEnd: issue.line_end,
+    blobUrl: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
     // TODO: ext→Shiki-lang таблица + валидный fallback (с UI, Блок 3 — нужен список bundledLanguages)
     language: issue.file.split(".").pop() || "text",
-    code_lines,
+    codeLines,
   };
 }

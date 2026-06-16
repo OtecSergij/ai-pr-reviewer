@@ -1,31 +1,18 @@
 import { memo } from "react";
-import type { IssuePayload } from "@/app/hooks/review/types";
+import type { Issue } from "@/lib/review/issue";
 
-const SEVERITY_STYLES: Record<IssuePayload["severity"], string> = {
+const SEVERITY_STYLES: Record<Issue["severity"], string> = {
   error: "bg-red-100 text-red-800 ring-red-300",
   warning: "bg-amber-100 text-amber-800 ring-amber-300",
   nit: "bg-sky-100 text-sky-800 ring-sky-300",
   suggestion: "bg-zinc-100 text-zinc-700 ring-zinc-300",
 };
 
-/**
- * Черновая карточка issue (тема 5). Богатый рендер — подсветка синтаксиса,
- * diff-highlight, ссылка на GitHub blob — это тема 6. Сейчас задача —
- * чтобы issue читалась и появлялась по ходу стрима.
- *
- * memo: объекты issue в массиве append-only и не мутируются, ссылки стабильны —
- * карточки не ре-рендерятся от покадровых тиков текста агента. Критично
- * к теме 6, когда внутри появится дорогая Shiki-подсветка.
- */
-export const IssueCard = memo(function IssueCard({
-  issue,
-}: {
-  issue: IssuePayload;
-}) {
+export const IssueCard = memo(function IssueCard({ issue }: { issue: Issue }) {
   const lineRange =
-    issue.line_end !== issue.line_start
-      ? `${issue.line_start}–${issue.line_end}`
-      : `${issue.line_start}`;
+    issue.lineEnd !== issue.lineStart
+      ? `${issue.lineStart}–${issue.lineEnd}`
+      : `${issue.lineStart}`;
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
