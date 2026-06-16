@@ -3,24 +3,25 @@ import {
   GitHubApiError,
   NotFoundError,
 } from "@/lib/github/octokit";
-import type { IssueData } from "@/lib/issue";
+import type { Issue } from "@/lib/review/issue";
 import { tool, UIMessageStreamWriter } from "ai";
 import { z } from "zod";
-import { truncateBody } from "./utils";
-import { modelIssueSchema, ReviewUIMessage } from "../schema/review-stream";
-import type { ReviewToolName } from "./names";
-import { enrichIssue } from "./enrich-issue";
+import { truncateBody } from "./truncate-body";
+import { modelIssueSchema } from "@/lib/review/model-issue.schema";
+import type { ReviewUIMessage } from "@/lib/review/stream";
+import type { ReviewToolName } from "./tool-names";
+import { enrichIssue } from "@/lib/review/enrich-issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 
-export function makeReviewTools(
+export function createReviewTools(
   gh: GithubAccess,
-  UIIssues: Map<string, IssueData>,
+  UIIssues: Map<string, Issue>,
   repo: RepoContext,
   writer: UIMessageStreamWriter<ReviewUIMessage>
 ) {
   return {
     get_pr_metadata: tool({
-      description: `Start here to understand the PR's intent and scope before reading diffs. Fields it returns: 
+      description: `Start here to understand the PR's intent and scope before reading diffs. Fields it returns:
 title: what the author claims the PR does – check the code against it;
 body: author's description of the PR. If body_truncated is true – you see only the start of the body – don't assume it's the full description;
 changed_files: number of files touched – use it to gauge review scope;
@@ -30,17 +31,18 @@ base_ref – target branch.`,
       execute: async () => {
         console.log("[tool]", "get_pr_metadata", {});
 
-        const { title, body, changed_files, head_ref, base_ref } =
+        const { title, body, changedFiles, headRef, baseRef } =
           await gh.getPRMetadata();
         const truncatedBody = truncateBody(body);
 
+        // snake-проекция на LLM-границе: домен camelCase, модель ждёт snake.
         return {
           title,
           body: truncatedBody.body,
           body_truncated: truncatedBody.bodyTruncated,
-          changed_files,
-          head_ref,
-          base_ref,
+          changed_files: changedFiles,
+          head_ref: headRef,
+          base_ref: baseRef,
         };
       },
     }),
@@ -58,8 +60,17 @@ previous_filename: old file name, if it was renamed.`,
 
         const files = await gh.getPRFiles();
 
+        // snake-проекция на LLM-границе: PRFileSummary внутри camelCase,
+        // модель ждёт previous_filename.
         return {
-          files,
+          files: files.map((f) => ({
+            filename: f.filename,
+            status: f.status,
+            additions: f.additions,
+            deletions: f.deletions,
+            changes: f.changes,
+            previous_filename: f.previousFilename,
+          })),
         };
       },
     }),

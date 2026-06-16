@@ -3,7 +3,7 @@ import { GitHubError } from "./error-base";
 export type PRRef = {
   owner: string;
   repo: string;
-  pr_number: number;
+  prNumber: number;
 };
 
 export class InvalidPRUrl extends GitHubError {
@@ -46,10 +46,10 @@ export function parsePRUrl(input: string): PRRef {
     throw new InvalidPRUrl("missing owner or repo", input);
   }
 
-  const pr_number = Number(numberStr);
-  if (!Number.isInteger(pr_number) || pr_number <= 0) {
+  const prNumber = Number(numberStr);
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
     throw new InvalidPRUrl(`invalid PR number: ${numberStr}`, input);
   }
 
-  return { owner, repo, pr_number };
+  return { owner, repo, prNumber };
 }

@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  IssuePayload,
-  PRFileSummary,
-  PRMeta,
-  ReviewChunk,
-  ReviewStatus,
-  ToolActivity,
-} from "./types";
+import type { InferUIMessageChunk } from "ai";
+import type { Issue } from "@/lib/review/issue";
+import type { PRMeta, ReviewUIMessage } from "@/lib/review/stream";
+import type { PRFileSummary } from "@/lib/github/octokit";
+
+// Экспортится только ToolActivity — его импортит agent-panel. ReviewStatus и
+// ReviewChunk используются только здесь, поэтому остаются локальными.
+type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
+
+export type ToolActivity = { toolName: string; input: unknown };
+
+type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
 
 export function useReview() {
   const [status, setStatus] = useState<ReviewStatus>("idle");
-  const [issues, setIssues] = useState<IssuePayload[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [activity, setActivity] = useState<ToolActivity | null>(null);
   const [agentText, setAgentText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +62,7 @@ export function useReview() {
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pr_url: prUrl }),
+        body: JSON.stringify({ prUrl }),
         signal: ac.signal,
       });
 

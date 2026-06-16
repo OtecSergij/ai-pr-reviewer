@@ -1,4 +1,4 @@
-import type { ModelIssue } from "@/lib/ai/schema/review-stream";
+import type { ModelIssue } from "./model-issue.schema";
 
 export type CodeLineKind = "added" | "removed" | "context";
 
@@ -9,16 +9,16 @@ export type CodeLine = {
   target: boolean;
 };
 
-export type IssueData = {
+export type Issue = {
   id: string;
   severity: ModelIssue["severity"];
   title: string;
   body: string;
   suggestion?: string;
   file: string;
-  line_start: number;
-  line_end: number;
-  blob_url: string;
+  lineStart: number;
+  lineEnd: number;
+  blobUrl: string;
   language: string;
-  code_lines: CodeLine[];
+  codeLines: CodeLine[];
 };
