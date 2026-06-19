@@ -1,6 +1,8 @@
 import { UIMessage } from "ai";
 import type { Issue } from "./issue";
-import type { PRFileSummary } from "@/lib/github/octokit";
+import type { PRFileStatus, PRFileSummary } from "@/lib/github/octokit";
+
+export type { PRFileStatus, PRFileSummary };
 
 export const ISSUE_DATA_KEY = "issue" as const;
 

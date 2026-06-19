@@ -1,1 +1,86 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  /* нейтральная шкала: текст от тёмного к светлому */
+  --color-ink: #18181b;
+  --color-ink-soft: #27272a;
+  --color-muted: #57606a;
+  --color-faint: #8c959f;
+  --color-subtle: #a1a1aa;
+  /* границы и фоновые поверхности */
+  --color-border: #e4e4e7;
+  --color-border-subtle: #ebebee;
+  --color-border-strong: #d4d4d8;
+  --color-surface-subtle: #f4f4f5;
+  /* ссылки */
+  --color-link: #0969da;
+
+  --animate-fade-up: fade-up 0.5s ease both;
+  --animate-card-in: card-in 0.4s ease both;
+  --animate-file-pulse: file-pulse 1.6s ease-in-out infinite;
+  --animate-dot-pop: dot-pop 0.25s ease both;
+  --animate-spin-fast: spin 0.7s linear infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes file-pulse {
+  0%,
+  100% {
+    background-color: #eef2ff;
+  }
+  50% {
+    background-color: #e0e7ff;
+  }
+}
+
+@keyframes dot-pop {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@layer base {
+  html,
+  body {
+    background-color: #fafafa;
+  }
+  body {
+    color: #18181b;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background-color: #e0e7ff;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
