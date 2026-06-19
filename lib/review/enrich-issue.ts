@@ -7,33 +7,43 @@ import { createHash } from "node:crypto";
 
 const WINDOW = 3;
 
+function normalizeModelText(s: string): string {
+  return s
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "  ");
+}
+
 function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
+  const inRange = (n: number | null): boolean =>
+    n !== null && n >= issue.line_start && n <= issue.line_end;
+
   const hunk = parseUnifiedDiff(patch).find(
     ({ newStart, newEnd }) =>
-      newEnd >= issue.line_end && newStart <= issue.line_start
+      newStart <= issue.line_end && newEnd >= issue.line_start
   );
   if (!hunk) return null;
 
-  const firstIdx = hunk.lines.findIndex(
-    ({ newLineno }) => newLineno === issue.line_start
-  );
-  const lastIdx = hunk.lines.findIndex(
-    ({ newLineno }) => newLineno === issue.line_end
+  const targetIdxs = hunk.lines.flatMap((line, i) =>
+    inRange(line.newLineno) ? [i] : []
   );
 
-  const windowLines = hunk.lines.slice(
-    Math.max(0, firstIdx - WINDOW),
-    lastIdx + WINDOW + 1
-  );
+  const [start, end] =
+    targetIdxs.length > 0
+      ? [
+          Math.max(0, targetIdxs[0] - WINDOW),
+          Math.min(
+            hunk.lines.length,
+            targetIdxs[targetIdxs.length - 1] + WINDOW + 1
+          ),
+        ]
+      : [0, hunk.lines.length];
 
-  return windowLines.map((line) => ({
+  return hunk.lines.slice(start, end).map((line) => ({
     lineno: line.newLineno,
     content: line.content,
     kind: line.kind,
-    target:
-      line.newLineno !== null &&
-      line.newLineno >= issue.line_start &&
-      line.newLineno <= issue.line_end,
+    target: inRange(line.newLineno),
   }));
 }
 
@@ -51,8 +61,6 @@ async function buildCodeLines(
   }
 }
 
-// Граница LLM → домен: на вход snake-поля ModelIssue (контракт модели),
-// на выходе доменный Issue в camelCase.
 export async function enrichIssue(
   gh: GithubAccess,
   repo: RepoContext,
@@ -70,8 +78,10 @@ export async function enrichIssue(
     id,
     severity: issue.severity,
     title: issue.title,
-    body: issue.body,
-    suggestion: issue.suggestion,
+    body: normalizeModelText(issue.body),
+    suggestion: issue.suggestion
+      ? normalizeModelText(issue.suggestion)
+      : undefined,
     file: issue.file,
     lineStart: issue.line_start,
     lineEnd: issue.line_end,
