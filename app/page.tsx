@@ -1,84 +1,147 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useReview } from "@/app/hooks/review/use-review";
+import { useElapsed } from "@/app/hooks/review/use-elapsed";
+import { countSteps } from "@/lib/review/transcript";
+import type { SeverityFilter } from "./components/severity-filters";
+import { IdleScreen } from "./components/idle-screen";
+import { WorkspaceHeader } from "./components/workspace-header";
+import { ChangedFilesSidebar } from "./components/changed-files-sidebar";
+import { AgentConsole } from "./components/agent-console";
+import { SummaryCard } from "./components/summary-card";
+import { SeverityFilters } from "./components/severity-filters";
+import { ErrorCard } from "./components/error-card";
 import { IssueCard } from "./components/issue-card";
-import { AgentPanel } from "./components/agent-panel";
 
 export default function Home() {
   const [url, setUrl] = useState("");
-  const { run, stop, status, issues, activity, error, agentText } =
-    useReview();
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
+  const [fileFilter, setFileFilter] = useState<string | null>(null);
 
-  const busy = status === "running";
+  const {
+    status,
+    issues,
+    error,
+    transcript,
+    toolEntries,
+    meta,
+    files,
+    run,
+    stop,
+    reset,
+  } = useReview();
+  const elapsed = useElapsed(status === "running");
+
+  const onFileClick = useCallback((filename: string) => {
+    setSeverityFilter("all");
+    setFileFilter((cur) => (cur === filename ? null : filename));
+  }, []);
+  const onClearFileFilter = useCallback(() => setFileFilter(null), []);
+
+  function start() {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    setSeverityFilter("all");
+    setFileFilter(null);
+    run(trimmed);
+  }
+
+  if (status === "idle") {
+    return (
+      <IdleScreen
+        url={url}
+        onUrlChange={setUrl}
+        visibility={visibility}
+        onVisibilityChange={setVisibility}
+        onStart={start}
+      />
+    );
+  }
+
+  const running = status === "running";
+  const finished = status === "done" || status === "aborted";
+  const filtered = issues.filter(
+    (i) =>
+      (severityFilter === "all" || i.severity === severityFilter) &&
+      (!fileFilter || i.file === fileFilter)
+  );
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="text-xl font-semibold text-zinc-900">AI PR Reviewer</h1>
-      <p className="mt-1 text-sm text-zinc-500">
-        Вставь ссылку на публичный GitHub PR — агент пройдёт по нему и выдаст
-        замечания.
-      </p>
-
-      <form
-        className="mt-6 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (url.trim()) run(url.trim());
-        }}
-      >
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          disabled={busy}
-          placeholder="https://github.com/owner/repo/pull/123"
-          className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-500 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400"
-        />
-        {busy ? (
-          <button
-            type="button"
-            onClick={stop}
-            className="rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700"
-          >
-            Стоп
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white"
-          >
-            Review
-          </button>
-        )}
-      </form>
-
-      <AgentPanel
-        activity={busy ? activity : null}
-        text={agentText}
-        done={!busy}
+    <div className="flex min-h-screen flex-col">
+      <WorkspaceHeader
+        meta={meta}
+        status={status}
+        elapsed={elapsed}
+        onStop={stop}
+        onHome={reset}
       />
 
-      {error ? (
-        <div className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-inset ring-red-200">
-          {error}
-        </div>
-      ) : null}
+      <div className="mx-auto flex w-full max-w-[1240px] items-start px-5">
+        <ChangedFilesSidebar
+          files={files}
+          issues={issues}
+          toolEntries={toolEntries}
+          running={running}
+          hasError={status === "error"}
+          fileFilter={fileFilter}
+          onFileClick={onFileClick}
+        />
 
-      {status === "aborted" ? (
-        <div className="mt-4 rounded-md bg-zinc-100 px-3 py-2 text-sm text-zinc-600 ring-1 ring-inset ring-zinc-200">
-          Ревью остановлено.
-        </div>
-      ) : null}
+        <main className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-4 pb-[90px] pl-6 pt-5">
+          {status === "error" ? (
+            <ErrorCard message={error} onEditUrl={reset} onTryAgain={start} />
+          ) : null}
 
-      <section className="mt-6 space-y-3">
-        {issues.map((issue, i) => (
-          <IssueCard key={i} issue={issue} />
-        ))}
-      </section>
+          {running ? <AgentConsole transcript={transcript} /> : null}
 
-      {status === "done" && issues.length === 0 && !error ? (
-        <p className="mt-6 text-sm text-zinc-500">Замечаний не найдено.</p>
-      ) : null}
-    </main>
+          {finished ? (
+            <SummaryCard
+              issues={issues}
+              meta={meta}
+              stepCount={countSteps(transcript)}
+              elapsed={elapsed}
+              stopped={status === "aborted"}
+              isPublic={visibility === "public"}
+            />
+          ) : null}
+
+          {finished && transcript.length > 0 ? (
+            <AgentConsole transcript={transcript} mode="trace" />
+          ) : null}
+
+          {issues.length > 0 ? (
+            <SeverityFilters
+              issues={issues}
+              severityFilter={severityFilter}
+              onSeverityChange={setSeverityFilter}
+              fileFilter={fileFilter}
+              onClearFileFilter={onClearFileFilter}
+            />
+          ) : null}
+
+          {filtered.map((issue) => (
+            <IssueCard key={issue.id} issue={issue} />
+          ))}
+
+          {running && issues.length === 0 ? (
+            <Hint>Issues will appear here as the agent finds them…</Hint>
+          ) : null}
+
+          {issues.length > 0 && filtered.length === 0 ? (
+            <Hint>No issues match the current filter.</Hint>
+          ) : null}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border p-7 text-center text-[13px] text-subtle">
+      {children}
+    </div>
   );
 }
