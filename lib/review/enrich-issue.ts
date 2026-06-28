@@ -55,8 +55,7 @@ async function buildCodeLines(
     const patch = await gh.getDiff(issue.file);
     if (!patch) return [];
     return sliceFromDiff(patch, issue) ?? [];
-  } catch (e) {
-    console.warn("[enrichIssue] codeLines → []:", issue.file, e);
+  } catch {
     return [];
   }
 }

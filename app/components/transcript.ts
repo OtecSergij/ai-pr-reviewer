@@ -20,3 +20,20 @@ export function toolLabel(
       return { label: "Reviewing", detail: "" };
   }
 }
+
+export function statusLabel(status?: string): string {
+  switch (status) {
+    case "not_found":
+      return "not found";
+    case "no_patch":
+      return "no patch";
+    case "not_in_pr":
+      return "not in PR";
+    case "too_large":
+      return "too large";
+    case "unavailable":
+      return "unavailable";
+    default:
+      return status ?? "skipped";
+  }
+}

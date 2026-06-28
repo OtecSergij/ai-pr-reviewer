@@ -24,6 +24,7 @@ export default function Home() {
     status,
     issues,
     error,
+    errorKind,
     transcript,
     toolEntries,
     meta,
@@ -91,7 +92,12 @@ export default function Home() {
 
         <main className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-4 pb-[90px] pl-6 pt-5">
           {status === "error" ? (
-            <ErrorCard message={error} onEditUrl={reset} onTryAgain={start} />
+            <ErrorCard
+              kind={errorKind ?? "review"}
+              message={error}
+              onEditUrl={reset}
+              onTryAgain={start}
+            />
           ) : null}
 
           {running ? <AgentConsole transcript={transcript} /> : null}

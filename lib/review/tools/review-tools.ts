@@ -29,8 +29,6 @@ head_ref – source branch;
 base_ref – target branch.`,
       inputSchema: z.object({}),
       execute: async () => {
-        console.log("[tool]", "get_pr_metadata", {});
-
         const { title, body, changedFiles, headRef, baseRef } =
           await gh.getPRMetadata();
         const truncatedBody = truncateBody(body);
@@ -56,8 +54,6 @@ changes: total lines changed (additions + deletions);
 previous_filename: old file name, if it was renamed.`,
       inputSchema: z.object({}),
       execute: async () => {
-        console.log("[tool]", "get_pr_files_summary", {});
-
         const files = await gh.getPRFiles();
 
         // snake-проекция на LLM-границе: PRFileSummary внутри camelCase,
@@ -82,7 +78,6 @@ no_patch – skip the file.`,
         filename: z.string(),
       }),
       execute: async ({ filename }) => {
-        console.log("[tool]", "get_diff", { filename });
         const diff = await gh.getDiff(filename);
 
         if (!diff) {
@@ -105,7 +100,7 @@ no_patch – skip the file.`,
       },
     }),
     get_file_contents: tool({
-      description: `Returns the full content of a single file at the PR's head state. Use it when the diff alone isn't enough to judge a change – e.g., to see how a changed function is defined or used elsewhere in the file. Returns { content, size } in the success case. Returns {status, reason} if there is a problem:
+      description: `Returns the full content of a single file at the PR's head state. Call get_file_contents only when the diff alone is insufficient to judge the change — for example, when a referenced symbol is defined outside the diff, or when you need to see how the changed code is used elsewhere in the file. If the change is self-contained and the diff gives you everything you need, do not fetch the file. Returns { content, size } in the success case. Returns {status, reason} if there is a problem:
 not_found – the file doesn't exist at the PR head (e.g., deleted in this PR) or the path may be wrong – check get_pr_files_summary for valid paths;
 too_large – read file via get_diff, whole file can't be fetched;
 unavailable – couldn't read the file; see reason (e.g., too large, or the path is a directory).`,
@@ -113,8 +108,6 @@ unavailable – couldn't read the file; see reason (e.g., too large, or the path
         path: z.string(),
       }),
       execute: async ({ path }) => {
-        console.log("[tool]", "get_file_contents", { path });
-
         try {
           const { content, size } = await gh.getFileContents({
             path,
@@ -145,8 +138,6 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
         path: z.string(),
       }),
       execute: async ({ path }) => {
-        console.log("[tool]", "list_directory", { path });
-
         try {
           const entries = await gh.listDirectory({ path, ref: repo.headSha });
 
