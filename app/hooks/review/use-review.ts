@@ -8,9 +8,20 @@ import type {
   PRMeta,
   ReviewUIMessage,
 } from "@/lib/review/stream";
-import type { ReviewStatus, TranscriptEntry } from "@/lib/review/transcript";
+import type {
+  ErrorKind,
+  ReviewStatus,
+  TranscriptEntry,
+} from "@/lib/review/transcript";
 
 type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
+
+function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
+  return entries.find(
+    (e): e is Extract<TranscriptEntry, { kind: "tool" }> =>
+      e.kind === "tool" && e.toolCallId === toolCallId
+  );
+}
 
 export function useReview() {
   const [status, setStatus] = useState<ReviewStatus>("idle");
@@ -18,6 +29,7 @@ export function useReview() {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [toolEntries, setToolEntries] = useState<TranscriptEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
   const [files, setFiles] = useState<PRFileSummary[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -40,19 +52,23 @@ export function useReview() {
     commitTranscript();
   }, [commitTranscript]);
 
+  const clearReviewState = useCallback(() => {
+    transcriptRef.current = [];
+    flushTranscript();
+    toolEntriesRef.current = [];
+    setToolEntries([]);
+    setIssues([]);
+    setError(null);
+    setErrorKind(null);
+    setMeta(null);
+    setFiles([]);
+  }, [flushTranscript]);
+
   const run = useCallback(
     async (prUrl: string) => {
       if (abortRef.current) return;
 
-      transcriptRef.current = [];
-      flushTranscript();
-      toolEntriesRef.current = [];
-      setToolEntries([]);
-
-      setIssues([]);
-      setError(null);
-      setMeta(null);
-      setFiles([]);
+      clearReviewState();
       setStatus("running");
 
       const ac = new AbortController();
@@ -67,10 +83,9 @@ export function useReview() {
         });
 
         if (!res.ok || !res.body) {
-          const text = await res.text().catch(() => "");
-          setError(
-            `Request failed: ${res.status} ${res.statusText} ${text}`.trim()
-          );
+          const text = (await res.text().catch(() => "")).trim();
+          setError(text || null);
+          setErrorKind("load");
           setStatus("error");
           return;
         }
@@ -110,13 +125,45 @@ export function useReview() {
               case "tool-input-available": {
                 const toolEntry: TranscriptEntry = {
                   kind: "tool",
+                  toolCallId: chunk.toolCallId,
                   toolName: chunk.toolName,
                   input: chunk.input,
+                  outcome: "running",
                 };
                 entries.push(toolEntry);
                 scheduleCommit();
                 toolEntriesRef.current.push(toolEntry);
                 setToolEntries(toolEntriesRef.current.slice());
+                break;
+              }
+
+              case "tool-output-available": {
+                const entry = findToolEntry(entries, chunk.toolCallId);
+                if (entry) {
+                  const output = chunk.output;
+                  if (
+                    output &&
+                    typeof output === "object" &&
+                    "status" in output
+                  ) {
+                    entry.outcome = "skipped";
+                    entry.note = String(
+                      (output as Record<string, unknown>).status
+                    );
+                  } else {
+                    entry.outcome = "ok";
+                  }
+                  scheduleCommit();
+                }
+                break;
+              }
+
+              case "tool-output-error": {
+                const entry = findToolEntry(entries, chunk.toolCallId);
+                if (entry) {
+                  entry.outcome = "failed";
+                  scheduleCommit();
+                }
                 break;
               }
 
@@ -163,6 +210,7 @@ export function useReview() {
 
         if (streamError) {
           setError(streamError);
+          setErrorKind("review");
           setStatus("error");
         } else {
           setStatus("done");
@@ -173,13 +221,14 @@ export function useReview() {
           return;
         }
         setError(e instanceof Error ? e.message : String(e));
+        setErrorKind("review");
         setStatus("error");
       } finally {
         abortRef.current = null;
         flushTranscript();
       }
     },
-    [flushTranscript, scheduleCommit]
+    [clearReviewState, flushTranscript, scheduleCommit]
   );
 
   const stop = useCallback(() => {
@@ -189,16 +238,9 @@ export function useReview() {
   const reset = useCallback(() => {
     if (abortRef.current) return;
 
-    transcriptRef.current = [];
-    flushTranscript();
-    toolEntriesRef.current = [];
-    setToolEntries([]);
-    setIssues([]);
-    setError(null);
-    setMeta(null);
-    setFiles([]);
+    clearReviewState();
     setStatus("idle");
-  }, [flushTranscript]);
+  }, [clearReviewState]);
 
   useEffect(
     () => () => {
@@ -217,6 +259,7 @@ export function useReview() {
     transcript,
     toolEntries,
     error,
+    errorKind,
     meta,
     files,
   };

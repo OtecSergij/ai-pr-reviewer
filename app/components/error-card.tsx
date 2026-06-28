@@ -1,10 +1,20 @@
+import type { ErrorKind } from "@/lib/review/transcript";
+
 type ErrorCardProps = {
+  kind: ErrorKind;
   message: string | null;
   onEditUrl: () => void;
   onTryAgain: () => void;
 };
 
-export function ErrorCard({ message, onEditUrl, onTryAgain }: ErrorCardProps) {
+export function ErrorCard({
+  kind,
+  message,
+  onEditUrl,
+  onTryAgain,
+}: ErrorCardProps) {
+  const isLoad = kind === "load";
+
   return (
     <div className="animate-card-in rounded-xl border border-[#ffd1ce] bg-white p-[18px]">
       <div className="flex items-center gap-2.5">
@@ -12,7 +22,7 @@ export function ErrorCard({ message, onEditUrl, onTryAgain }: ErrorCardProps) {
           !
         </div>
         <div className="text-[16px] font-bold tracking-[-0.01em]">
-          Couldn’t load this pull request
+          {isLoad ? "Couldn’t load this pull request" : "Review failed"}
         </div>
       </div>
 
@@ -22,14 +32,16 @@ export function ErrorCard({ message, onEditUrl, onTryAgain }: ErrorCardProps) {
         </p>
       ) : null}
 
-      <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
-        Check that the link looks like{" "}
-        <span className="rounded-[5px] bg-surface-subtle px-1.5 py-px font-mono text-[12px] text-muted">
-          github.com/owner/repo/pull/123
-        </span>{" "}
-        and that the PR is public — or switch to Private PR and provide a token
-        with the <span className="font-mono">repo</span> scope.
-      </p>
+      {isLoad ? (
+        <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+          Check that the link looks like{" "}
+          <span className="rounded-[5px] bg-surface-subtle px-1.5 py-px font-mono text-[12px] text-muted">
+            github.com/owner/repo/pull/123
+          </span>{" "}
+          and that the PR is public — or switch to Private PR and provide a token
+          with the <span className="font-mono">repo</span> scope.
+        </p>
+      ) : null}
 
       <div className="mt-3.5 flex gap-2">
         <button

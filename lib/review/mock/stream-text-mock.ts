@@ -4,6 +4,8 @@ import type {
   ToolCallOptions,
   ToolExecuteFunction,
 } from "ai";
+import { APICallError, RetryError, LoadAPIKeyError } from "ai";
+import { env } from "@/lib/env";
 
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { ReviewToolName } from "@/lib/review/tools/tool-names";
@@ -62,10 +64,12 @@ type MockChunk = InferUIMessageChunk<ReviewUIMessage>;
  * переписывание execute'ов.
  */
 export function streamTextMock(options: StreamTextOptions): {
-  toUIMessageStream(): ReadableStream<MockChunk>;
+  toUIMessageStream(uiOptions?: {
+    onError?: (error: unknown) => string;
+  }): ReadableStream<MockChunk>;
 } {
   return {
-    toUIMessageStream() {
+    toUIMessageStream(uiOptions?: { onError?: (error: unknown) => string }) {
       return new ReadableStream<MockChunk>({
         async start(controller) {
           // После abort потребитель мог уже отменить стрим — enqueue в этом
@@ -83,11 +87,15 @@ export function streamTextMock(options: StreamTextOptions): {
               enqueue(chunk);
             }
           } catch (e) {
-            // настоящий streamText доставляет сбои error-чанком, не падением стрима
-            enqueue({
-              type: "error",
-              errorText: e instanceof Error ? e.message : String(e),
-            });
+            // настоящий streamText доставляет сбои error-чанком и прогоняет их
+            // через onError из route — мок делает так же, иначе тест бил бы в
+            // сырой message, а не в реальный errorToMessage.
+            const errorText = uiOptions?.onError
+              ? uiOptions.onError(e)
+              : e instanceof Error
+                ? e.message
+                : String(e);
+            enqueue({ type: "error", errorText });
           }
 
           try {
@@ -101,6 +109,52 @@ export function streamTextMock(options: StreamTextOptions): {
   };
 }
 
+// Dev-only фабрика инъектируемых ошибок (MOCK_ERROR) для проверки пути 2.
+// Классы настоящие — иначе .isInstance в errorToMessage вернёт false и
+// классификация не сработает.
+function injectedError(): unknown {
+  const apiUrl = "https://mock.provider/v1/messages";
+
+  switch (env.MOCK_ERROR) {
+    case "api-retryable":
+      return new APICallError({
+        message: "Service Unavailable",
+        url: apiUrl,
+        requestBodyValues: {},
+        statusCode: 503,
+        isRetryable: true,
+      });
+    case "retry-exhausted":
+      return new RetryError({
+        message: "Failed after maximum retries",
+        reason: "maxRetriesExceeded",
+        errors: [
+          new APICallError({
+            message: "Service Unavailable",
+            url: apiUrl,
+            requestBodyValues: {},
+            statusCode: 503,
+            isRetryable: true,
+          }),
+        ],
+      });
+    case "api-400":
+      return new APICallError({
+        message: "Bad Request",
+        url: apiUrl,
+        requestBodyValues: {},
+        statusCode: 400,
+        isRetryable: false,
+      });
+    case "load-key":
+      return new LoadAPIKeyError({ message: "API key is missing" });
+    case "unknown":
+      return new Error("Something unexpected blew up");
+    default:
+      return undefined;
+  }
+}
+
 // Сценарий ревью: те же типы чанков и в том же порядке, что у настоящего
 // streamText + клиентского switch в use-review.ts (text-start даёт разрыв
 // абзаца, tool-input-available — строку активности, data-issue придёт
@@ -109,6 +163,16 @@ async function* reviewScenario(
   options: StreamTextOptions
 ): AsyncGenerator<MockChunk> {
   const { tools, abortSignal: signal } = options;
+
+  // Dev-инъекция ошибки (MOCK_ERROR): бросаем типизированную ошибку, чтобы
+  // прогнать её через реальный onError → errorToMessage пути 2.
+  const injected = injectedError();
+  if (injected) throw injected;
+
+  if (env.MOCK_ERROR === "tool-outcomes") {
+    yield* toolOutcomesDemo(tools, signal);
+    return;
+  }
 
   // Настоящий streamText гоняет input через zod до execute, мок зовёт execute
   // напрямую — поэтому фикстуры проверяем сами: правка координат/полей упадёт
@@ -209,8 +273,47 @@ async function* reviewScenario(
   yield { type: "finish", finishReason: "stop" };
 }
 
-// Текстовый блок: text-start → несколько text-delta → text-end.
-// У каждого блока свой id — по text-start клиент вставляет разрыв абзаца.
+// Dev-демо (MOCK_ERROR=tool-outcomes): показать исходы тулзов в консоли —
+// реальный {status} (skipped) и синтетический tool-output-error (failed).
+async function* toolOutcomesDemo(
+  tools: StreamTextOptions["tools"],
+  signal?: AbortSignal
+): AsyncGenerator<MockChunk> {
+  yield { type: "start" };
+
+  yield* textBlock(
+    "demo-text",
+    ["Demonstrating tool outcomes: ", "one skipped, one failed."],
+    signal
+  );
+  if (signal?.aborted) return;
+
+  yield* toolStep(
+    tools,
+    REVIEW_TOOL_NAMES.getFileContents,
+    { path: "does/not/exist.ts" },
+    "demo-skip",
+    signal
+  );
+  if (signal?.aborted) return;
+
+  yield {
+    type: "tool-input-available",
+    toolCallId: "demo-fail",
+    toolName: REVIEW_TOOL_NAMES.getDiff,
+    input: { filename: "index.js" },
+  };
+  await sleep(TOOL_PAUSE_MS, signal);
+  if (signal?.aborted) return;
+  yield {
+    type: "tool-output-error",
+    toolCallId: "demo-fail",
+    errorText: "Simulated tool failure",
+  };
+
+  yield { type: "finish", finishReason: "stop" };
+}
+
 async function* textBlock(
   id: string,
   deltas: string[],
@@ -231,7 +334,6 @@ async function* textBlock(
   yield { type: "text-end", id };
 }
 
-// Один вызов тула: tool-input-available → НАСТОЯЩИЙ execute → tool-output-available.
 async function* toolStep(
   tools: StreamTextOptions["tools"],
   toolName: ReviewToolName,

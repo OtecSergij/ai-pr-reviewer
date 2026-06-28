@@ -14,6 +14,7 @@ import {
   type DirectoryEntry,
   type DirectoryEntryType,
 } from "./list-directory";
+import { GitHubApiError } from "./errors";
 
 export type {
   PRMetadata,
@@ -48,6 +49,18 @@ export type GithubAccess = {
   }) => Promise<DirectoryEntry[]>;
 };
 
+const RETRY_OPTS = {
+  baseMs: 500,
+  maxMs: 5000,
+  retries: 2,
+  isRetryable: (e: unknown) => {
+    if (e instanceof GitHubApiError && e.status >= 500) {
+      return true;
+    }
+    return false;
+  },
+};
+
 export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
   if (!token) {
     throw new Error("GitHub token is required to create access object");
@@ -60,14 +73,14 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
 
   const ensureMetadata = (): Promise<PRMetadata> => {
     if (!metadataPromise) {
-      metadataPromise = getPRMetadata(client, pr);
+      metadataPromise = withRetry(() => getPRMetadata(client, pr), RETRY_OPTS);
     }
     return metadataPromise;
   };
 
   const ensureFiles = (): Promise<Map<string, PRFile>> => {
     if (!filesPromise) {
-      filesPromise = getPRFiles(client, pr).then(
+      filesPromise = withRetry(() => getPRFiles(client, pr), RETRY_OPTS).then(
         (arr) => new Map(arr.map((f) => [f.filename, f]))
       );
     }
@@ -88,22 +101,54 @@ export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
       const key = `${ref}:${path}`;
       let cached = fileContentsCache.get(key);
       if (!cached) {
-        cached = getFileContents(client, {
-          owner: pr.owner,
-          repo: pr.repo,
-          path,
-          ref,
-        });
+        cached = withRetry(
+          () =>
+            getFileContents(client, {
+              owner: pr.owner,
+              repo: pr.repo,
+              path,
+              ref,
+            }),
+          RETRY_OPTS
+        );
         fileContentsCache.set(key, cached);
       }
       return cached;
     },
     listDirectory: ({ path, ref }) =>
-      listDirectory(client, {
-        owner: pr.owner,
-        repo: pr.repo,
-        path,
-        ref,
-      }),
+      withRetry(
+        () =>
+          listDirectory(client, {
+            owner: pr.owner,
+            repo: pr.repo,
+            path,
+            ref,
+          }),
+        RETRY_OPTS
+      ),
   };
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: {
+    retries: number;
+    baseMs: number;
+    maxMs: number;
+    isRetryable: (e: unknown) => boolean;
+  }
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!options.isRetryable(e) || attempt >= options.retries) {
+        throw e;
+      }
+
+      const expo = Math.min(options.maxMs, options.baseMs * 2 ** attempt);
+
+      await new Promise((r) => setTimeout(r, Math.random() * expo));
+    }
+  }
 }

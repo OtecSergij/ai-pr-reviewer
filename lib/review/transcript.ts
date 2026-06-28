@@ -2,8 +2,19 @@ import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 
 export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 
+export type ErrorKind = "load" | "review";
+
+export type ToolOutcome = "running" | "ok" | "skipped" | "failed";
+
 export type TranscriptEntry =
-  | { kind: "tool"; toolName: string; input: unknown }
+  | {
+      kind: "tool";
+      toolCallId: string;
+      toolName: string;
+      input: unknown;
+      outcome: ToolOutcome;
+      note?: string;
+    }
   | { kind: "text"; text: string };
 
 export type ToolPath = { path: string; type: "file" | "dir" };

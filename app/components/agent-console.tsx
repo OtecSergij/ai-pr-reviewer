@@ -5,7 +5,7 @@ import type { TranscriptEntry } from "@/lib/review/transcript";
 import { countSteps } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
-import { toolLabel } from "./transcript";
+import { toolLabel, statusLabel } from "./transcript";
 
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
@@ -93,6 +93,13 @@ export const AgentConsole = memo(function AgentConsole({
                 >
                   ▸ {label}
                   {detail ? `  ·  ${detail}` : ""}
+                  {entry.outcome === "skipped" ? (
+                    <span className="text-[#6e7781]">
+                      {`  ·  ${statusLabel(entry.note)}`}
+                    </span>
+                  ) : entry.outcome === "failed" ? (
+                    <span className="text-[#9a6700]">{"  ·  failed"}</span>
+                  ) : null}
                 </div>
               );
             }
