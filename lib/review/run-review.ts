@@ -6,8 +6,12 @@ import {
   createUIMessageStreamResponse,
 } from "ai";
 
-import { parsePRUrl } from "@/lib/github/parse-url";
-import { createGithubAccess } from "@/lib/github/octokit";
+import { parsePRUrl, type PRRef } from "@/lib/github/parse-url";
+import {
+  createGithubAccess,
+  type GithubAccess,
+  type PRFileSummary,
+} from "@/lib/github/octokit";
 import { createReviewTools } from "@/lib/review/tools/review-tools";
 import { SYSTEM } from "@/lib/review/system-prompt";
 import { reviewModel, MODEL } from "@/lib/ai/provider";
@@ -15,26 +19,41 @@ import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
 import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
+import { errorToMessage, errorToResponse } from "@/lib/review/errors";
 
-// MOCK_REVIEW=1 подменяет streamText фикстурным моком — LLM не вызывается,
-// но тулзы (GitHub, emit_issue → data-issue) отрабатывают по-настоящему.
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
 
 export async function runReview(
   prUrl: string,
   signal: AbortSignal
 ): Promise<Response> {
-  const pr = parsePRUrl(prUrl);
+  let pr: PRRef,
+    gh: GithubAccess,
+    headSha: string,
+    title: string,
+    prFiles: PRFileSummary[];
 
-  const gh = createGithubAccess(env.GITHUB_PAT, pr);
+  try {
+    pr = parsePRUrl(prUrl);
 
-  const { headSha, changedFiles, title } = await gh.getPRMetadata();
+    gh = createGithubAccess(env.GITHUB_PAT, pr);
 
-  if (changedFiles > MAX_CHANGED_FILES) {
-    return new Response(
-      `Too many files changed. PR size must be less than ${MAX_CHANGED_FILES} files.`,
-      { status: 400 }
-    );
+    const prMetadata = await gh.getPRMetadata();
+
+    if (prMetadata.changedFiles > MAX_CHANGED_FILES) {
+      return new Response(
+        `Too many files changed. PR size must be less than ${MAX_CHANGED_FILES} files.`,
+        { status: 400 }
+      );
+    }
+
+    headSha = prMetadata.headSha;
+    title = prMetadata.title;
+    prFiles = await gh.getPRFiles();
+  } catch (e) {
+    const res = errorToResponse(e);
+    if (res) return res;
+    throw e;
   }
 
   const UIIssues = new Map<string, Issue>();
@@ -50,9 +69,6 @@ export async function runReview(
 
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
-      // Shell-данные (шапка + сайдбар) — в начале стрима, до агентного потока,
-      // чтобы воркспейс отрисовался сразу. getPRFiles кешируется (ensureFiles):
-      // модельный get_pr_files_summary переиспользует тот же запрос.
       writer.write({
         type: "data-meta",
         data: {
@@ -67,7 +83,7 @@ export async function runReview(
       });
       writer.write({
         type: "data-files",
-        data: await gh.getPRFiles(),
+        data: prFiles,
         transient: true,
       });
 
@@ -82,11 +98,9 @@ export async function runReview(
         abortSignal: signal,
       });
 
-      writer.merge(result.toUIMessageStream());
+      writer.merge(result.toUIMessageStream({ onError: errorToMessage }));
     },
-    onFinish: () => {
-      console.dir([...UIIssues.values()], { depth: null });
-    },
+    onError: errorToMessage,
   });
 
   return createUIMessageStreamResponse({ stream });

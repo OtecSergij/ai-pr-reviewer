@@ -25,7 +25,7 @@ export const modelIssueSchema = z
     severity: z
       .enum(["error", "warning", "nit", "suggestion"])
       .describe(
-        "How serious the issue is (error is most serious, suggestion the least). Follow the SEVERITY rubric in the instructions."
+        "How serious the issue is (error is most serious, suggestion the least). Follow the SEVERITY rubric in the instructions. Use error/warning only when you're confident; if uncertain, use nit/suggestion or skip it entirely."
       ),
     title: z
       .string()
