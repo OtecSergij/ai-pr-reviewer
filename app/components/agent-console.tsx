@@ -5,7 +5,7 @@ import type { TranscriptEntry } from "@/lib/review/transcript";
 import { countSteps } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
-import { toolLabel, statusLabel } from "./transcript";
+import { toolLabel, statusLabel, providerLabel, reasonLabel } from "./transcript";
 
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
@@ -15,6 +15,9 @@ type AgentConsoleProps = {
 function isConsoleEntry(entry: TranscriptEntry): boolean {
   if (entry.kind === "tool") {
     return entry.toolName !== REVIEW_TOOL_NAMES.emitIssue;
+  }
+  if (entry.kind === "failover") {
+    return true;
   }
   return entry.text !== "";
 }
@@ -100,6 +103,21 @@ export const AgentConsole = memo(function AgentConsole({
                   ) : entry.outcome === "failed" ? (
                     <span className="text-[#9a6700]">{"  ·  failed"}</span>
                   ) : null}
+                </div>
+              );
+            }
+            if (entry.kind === "failover") {
+              return (
+                <div
+                  key={i}
+                  className="my-2 flex items-center gap-2 font-mono text-[11px] font-semibold text-[#9a6700]"
+                >
+                  <span className="h-px flex-1 bg-[#f0e3c8]" />
+                  <span className="shrink-0">
+                    {providerLabel(entry.from)} {reasonLabel(entry.reason)} —
+                    switching to {providerLabel(entry.to)}
+                  </span>
+                  <span className="h-px flex-1 bg-[#f0e3c8]" />
                 </div>
               );
             }

@@ -32,6 +32,7 @@ export function useReview() {
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
   const [files, setFiles] = useState<PRFileSummary[]>([]);
+  const [totalTokens, setTotalTokens] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
   const transcriptRef = useRef<TranscriptEntry[]>([]);
@@ -62,10 +63,11 @@ export function useReview() {
     setErrorKind(null);
     setMeta(null);
     setFiles([]);
+    setTotalTokens(0);
   }, [flushTranscript]);
 
   const run = useCallback(
-    async (prUrl: string) => {
+    async (prUrl: string, anthropicKey?: string) => {
       if (abortRef.current) return;
 
       clearReviewState();
@@ -78,7 +80,7 @@ export function useReview() {
         const res = await fetch("/api/review", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prUrl }),
+          body: JSON.stringify({ prUrl, anthropicKey }),
           signal: ac.signal,
         });
 
@@ -179,6 +181,15 @@ export function useReview() {
                 setFiles(chunk.data);
                 break;
 
+              case "data-failover":
+                entries.push({ kind: "failover", ...chunk.data });
+                scheduleCommit();
+                break;
+
+              case "data-usage":
+                setTotalTokens((t) => t + chunk.data.tokens);
+                break;
+
               case "text-start":
                 entries.push({ kind: "text", text: "" });
                 scheduleCommit();
@@ -190,6 +201,25 @@ export function useReview() {
                   entries[entries.length - 1] = {
                     kind: "text",
                     text: last.text + chunk.delta,
+                  };
+                } else {
+                  entries.push({ kind: "text", text: chunk.delta });
+                }
+                scheduleCommit();
+                break;
+              }
+
+              case "reasoning-start":
+                entries.push({ kind: "text", text: "" });
+                scheduleCommit();
+                break;
+
+              case "reasoning-delta": {
+                const lastReasoning = entries[entries.length - 1];
+                if (lastReasoning && lastReasoning.kind === "text") {
+                  entries[entries.length - 1] = {
+                    kind: "text",
+                    text: lastReasoning.text + chunk.delta,
                   };
                 } else {
                   entries.push({ kind: "text", text: chunk.delta });
@@ -262,5 +292,6 @@ export function useReview() {
     errorKind,
     meta,
     files,
+    totalTokens,
   };
 }
