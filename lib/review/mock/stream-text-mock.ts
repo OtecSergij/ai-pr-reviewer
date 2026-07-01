@@ -12,6 +12,7 @@ import type { ReviewToolName } from "@/lib/review/tools/tool-names";
 import { modelIssueSchema } from "@/lib/review/model-issue.schema";
 import type { ModelIssue } from "@/lib/review/model-issue.schema";
 import type { ReviewUIMessage } from "@/lib/review/stream";
+import { errorToMessage } from "@/lib/review/errors";
 
 // Вставлять этот URL в форму при MOCK_REVIEW=1.
 // vercel/ms#35 — merged в 2014-м, 3 файла (index.js, test/test.js, README.md),
@@ -53,60 +54,32 @@ export const mockModelIssues: ModelIssue[] = [
 // компилируется без изменений при подмене реализации.
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
-// Ровно тот тип чанков, который route отдаёт в writer.merge(...).
+// Ровно тот тип чанков, который цикл ревью пишет в writer.
 type MockChunk = InferUIMessageChunk<ReviewUIMessage>;
 
-/**
- * Dev-замена streamText для /api/review: стримит заранее срежиссированный
- * сценарий ревью PR из MOCK_PR_URL, не обращаясь к LLM. Тулзы при этом
- * вызываются ПО-НАСТОЯЩЕМУ: GithubAccess прогревает кэш, а emit_issue сам
- * пишет data-issue в writer — мок не дублирует этот канал и переживёт
- * переписывание execute'ов.
- */
-export function streamTextMock(options: StreamTextOptions): {
-  toUIMessageStream(uiOptions?: {
-    onError?: (error: unknown) => string;
-  }): ReadableStream<MockChunk>;
-} {
-  return {
-    toUIMessageStream(uiOptions?: { onError?: (error: unknown) => string }) {
-      return new ReadableStream<MockChunk>({
-        async start(controller) {
-          // После abort потребитель мог уже отменить стрим — enqueue в этом
-          // состоянии кидает, для мока это не ошибка.
-          const enqueue = (chunk: MockChunk) => {
-            try {
-              controller.enqueue(chunk);
-            } catch {
-              /* стрим уже отменён потребителем */
-            }
-          };
+// Мок структурно реализует лишь то, что дёргает цикл ревью
+// (toUIMessageStream + колбэки из options), поэтому приводим его к полному типу
+// streamText через unknown — иначе union `mock | real` в run-review не сойдётся.
+export const streamTextMock = ((options: StreamTextOptions) => ({
+  toUIMessageStream: () => mockUIStream(options),
+})) as unknown as typeof streamText;
 
-          try {
-            for await (const chunk of reviewScenario(options)) {
-              enqueue(chunk);
-            }
-          } catch (e) {
-            // настоящий streamText доставляет сбои error-чанком и прогоняет их
-            // через onError из route — мок делает так же, иначе тест бил бы в
-            // сырой message, а не в реальный errorToMessage.
-            const errorText = uiOptions?.onError
-              ? uiOptions.onError(e)
-              : e instanceof Error
-                ? e.message
-                : String(e);
-            enqueue({ type: "error", errorText });
-          }
-
-          try {
-            controller.close();
-          } catch {
-            /* уже отменён */
-          }
-        },
-      });
-    },
-  };
+// Async-генератор, а не ReadableStream: цикл ревью потребляет результат через
+// `for await`, а web-ReadableStream в TS-типах не async-iterable.
+async function* mockUIStream(
+  options: StreamTextOptions
+): AsyncGenerator<MockChunk> {
+  try {
+    for await (const chunk of reviewScenario(options)) {
+      yield chunk;
+    }
+  } catch (e) {
+    // Настоящий streamText на сбое и дёргает options.onError, и кладёт error-чанк
+    // в стрим. Мок делает то же: onError выставляет флаг детекта в цикле, а
+    // сам error-чанк цикл отфильтрует.
+    options.onError?.({ error: e });
+    yield { type: "error", errorText: errorToMessage(e) };
+  }
 }
 
 // Dev-only фабрика инъектируемых ошибок (MOCK_ERROR) для проверки пути 2.

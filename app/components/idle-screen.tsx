@@ -7,7 +7,7 @@ type IdleScreenProps = {
   onUrlChange: (url: string) => void;
   visibility: "public" | "private";
   onVisibilityChange: (v: "public" | "private") => void;
-  onStart: () => void;
+  onStart: (anthropicKey?: string) => void;
 };
 
 const INPUT_CLASS =
@@ -26,7 +26,7 @@ export function IdleScreen({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    onStart();
+    onStart(premium && premiumKey.trim() ? premiumKey.trim() : undefined);
   }
 
   return (

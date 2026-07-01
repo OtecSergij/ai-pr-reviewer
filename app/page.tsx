@@ -29,6 +29,7 @@ export default function Home() {
     toolEntries,
     meta,
     files,
+    totalTokens,
     run,
     stop,
     reset,
@@ -41,12 +42,12 @@ export default function Home() {
   }, []);
   const onClearFileFilter = useCallback(() => setFileFilter(null), []);
 
-  function start() {
+  function start(anthropicKey?: string) {
     const trimmed = url.trim();
     if (!trimmed) return;
     setSeverityFilter("all");
     setFileFilter(null);
-    run(trimmed);
+    run(trimmed, anthropicKey);
   }
 
   if (status === "idle") {
@@ -75,6 +76,7 @@ export default function Home() {
         meta={meta}
         status={status}
         elapsed={elapsed}
+        tokens={totalTokens}
         onStop={stop}
         onHome={reset}
       />
@@ -113,7 +115,7 @@ export default function Home() {
             />
           ) : null}
 
-          {finished && transcript.length > 0 ? (
+          {(finished || status === "error") && transcript.length > 0 ? (
             <AgentConsole transcript={transcript} mode="trace" />
           ) : null}
 

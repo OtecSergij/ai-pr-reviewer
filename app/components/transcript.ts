@@ -1,4 +1,36 @@
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
+import type { ProviderName } from "@/lib/ai/provider";
+import type { FailureReason } from "@/lib/review/errors";
+
+export function providerLabel(provider: ProviderName): string {
+  switch (provider) {
+    case "cerebras":
+      return "Cerebras";
+    case "groq":
+      return "Groq";
+    case "google":
+      return "Gemini";
+    case "anthropic":
+      return "Anthropic";
+  }
+}
+
+export function reasonLabel(reason: FailureReason): string {
+  switch (reason) {
+    case "rate-limit":
+      return "hit rate limits";
+    case "overloaded":
+      return "is overloaded";
+    case "server":
+      return "had a server error";
+    case "too-large":
+      return "ran out of context";
+    case "unavailable":
+      return "is unavailable";
+    default:
+      return "failed";
+  }
+}
 
 export function toolLabel(
   toolName: string,

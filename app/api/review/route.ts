@@ -3,6 +3,7 @@ import { runReview } from "@/lib/review/run-review";
 
 const requestSchema = z.object({
   prUrl: z.string().min(1),
+  anthropicKey: z.string().min(1).optional(),
 });
 
 export async function POST(req: Request) {
@@ -15,5 +16,9 @@ export async function POST(req: Request) {
     });
   }
 
-  return runReview(parsed.data.prUrl, req.signal);
+  return runReview({
+    prUrl: parsed.data.prUrl,
+    signal: req.signal,
+    anthropicKey: parsed.data.anthropicKey,
+  });
 }

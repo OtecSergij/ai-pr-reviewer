@@ -11,6 +11,7 @@ type WorkspaceHeaderProps = {
   meta: PRMeta | null;
   status: WorkspacePhase;
   elapsed: number;
+  tokens: number;
   onStop: () => void;
   onHome: () => void;
 };
@@ -52,6 +53,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   meta,
   status,
   elapsed,
+  tokens,
   onStop,
   onHome,
 }: WorkspaceHeaderProps) {
@@ -85,6 +87,15 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
           {meta?.title ?? ""}
         </div>
       </div>
+
+      {tokens > 0 ? (
+        <div
+          className="shrink-0 whitespace-nowrap font-mono text-[11px] text-faint"
+          title="Total tokens used"
+        >
+          {tokens.toLocaleString()} tokens
+        </div>
+      ) : null}
 
       {/* провайдер-pill: реальная модель из стрима (meta.model) */}
       {meta ? (
