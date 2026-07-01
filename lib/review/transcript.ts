@@ -1,4 +1,5 @@
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
+import type { FailoverData } from "@/lib/review/stream";
 
 export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 
@@ -15,7 +16,8 @@ export type TranscriptEntry =
       outcome: ToolOutcome;
       note?: string;
     }
-  | { kind: "text"; text: string };
+  | { kind: "text"; text: string }
+  | ({ kind: "failover" } & FailoverData);
 
 export type ToolPath = { path: string; type: "file" | "dir" };
 
