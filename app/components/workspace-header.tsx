@@ -105,7 +105,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
       ) : null}
 
       <div
-        className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-[5px] text-[12px] font-semibold"
+        className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-[5px] text-[12px] font-semibold tabular-nums"
         style={{ backgroundColor: badge.bg, color: badge.color }}
       >
         {badge.spinner ? (
