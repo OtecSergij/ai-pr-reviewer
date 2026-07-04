@@ -25,6 +25,7 @@ import {
   errorToResponse,
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
+import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
 import { ReviewUIMessage } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
@@ -33,10 +34,12 @@ export async function runReview({
   prUrl,
   signal,
   anthropicKey,
+  ip,
 }: {
   prUrl: string;
   signal: AbortSignal;
   anthropicKey?: string;
+  ip: string;
 }): Promise<Response> {
   const candidates = selectModels(anthropicKey);
 
@@ -67,6 +70,15 @@ export async function runReview({
     const res = errorToResponse(e);
     if (res) return res;
     throw e;
+  }
+
+  if (signal.aborted) {
+    return new Response(null, { status: 499 });
+  }
+
+  const gate = await reviewLimiter.check(ip);
+  if (!gate.allowed) {
+    return rateLimitResponse(gate);
   }
 
   const UIIssues = new Map<string, Issue>();

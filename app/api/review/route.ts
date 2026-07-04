@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { runReview } from "@/lib/review/run-review";
+import {
+  getClientIp,
+  rateLimitResponse,
+  requestLimiter,
+} from "@/lib/rate-limit";
 
 const requestSchema = z.object({
   prUrl: z.string().min(1),
@@ -7,6 +12,13 @@ const requestSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+
+  const gate = await requestLimiter.check(ip);
+  if (!gate.allowed) {
+    return rateLimitResponse(gate);
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
 
@@ -20,5 +32,6 @@ export async function POST(req: Request) {
     prUrl: parsed.data.prUrl,
     signal: req.signal,
     anthropicKey: parsed.data.anthropicKey,
+    ip,
   });
 }
