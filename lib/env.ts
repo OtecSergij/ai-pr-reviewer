@@ -5,6 +5,11 @@ const EnvSchema = z.object({
   CEREBRAS_API_KEY: z.string().min(1),
   GROQ_API_KEY: z.string().min(1),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
+  REDIS_URL: z.string().min(1),
+  TRUST_PROXY: z
+    .enum(["1", "0", ""])
+    .optional()
+    .transform((v) => v === "1"),
   MOCK_REVIEW: z
     .string()
     .optional()
