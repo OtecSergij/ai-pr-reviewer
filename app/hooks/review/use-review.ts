@@ -87,7 +87,7 @@ export function useReview() {
         if (!res.ok || !res.body) {
           const text = (await res.text().catch(() => "")).trim();
           setError(text || null);
-          setErrorKind("load");
+          setErrorKind(res.status === 429 ? "rate-limit" : "load");
           setStatus("error");
           return;
         }

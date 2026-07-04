@@ -14,6 +14,11 @@ export function ErrorCard({
   onTryAgain,
 }: ErrorCardProps) {
   const isLoad = kind === "load";
+  const headline = isLoad
+    ? "Couldn’t load this pull request"
+    : kind === "rate-limit"
+      ? "Rate limit reached"
+      : "Review failed";
 
   return (
     <div className="animate-card-in rounded-xl border border-[#ffd1ce] bg-white p-[18px]">
@@ -22,7 +27,7 @@ export function ErrorCard({
           !
         </div>
         <div className="text-[16px] font-bold tracking-[-0.01em]">
-          {isLoad ? "Couldn’t load this pull request" : "Review failed"}
+          {headline}
         </div>
       </div>
 

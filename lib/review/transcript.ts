@@ -3,7 +3,7 @@ import type { FailoverData } from "@/lib/review/stream";
 
 export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 
-export type ErrorKind = "load" | "review";
+export type ErrorKind = "load" | "rate-limit" | "review";
 
 export type ToolOutcome = "running" | "ok" | "skipped" | "failed";
 
