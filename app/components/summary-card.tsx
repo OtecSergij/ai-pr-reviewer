@@ -13,7 +13,8 @@ type SummaryCardProps = {
   stepCount: number;
   elapsed: number;
   stopped: boolean;
-  isPublic: boolean;
+  isPrivate: boolean;
+  shareSlug: string | null;
 };
 
 export function SummaryCard({
@@ -22,7 +23,8 @@ export function SummaryCard({
   stepCount,
   elapsed,
   stopped,
-  isPublic,
+  isPrivate,
+  shareSlug,
 }: SummaryCardProps) {
   const counts = countBySeverity(issues);
   const pills = SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => {
@@ -95,13 +97,13 @@ export function SummaryCard({
         {doneMeta}
       </div>
 
-      {!stopped && isPublic ? (
-        <ShareBlock headSha={meta?.headSha ?? ""} />
+      {!stopped && !isPrivate && shareSlug ? (
+        <ShareBlock slug={shareSlug} />
       ) : null}
 
-      {stopped || !isPublic ? (
+      {stopped || isPrivate ? (
         <div className="mt-3.5 rounded-lg border border-border bg-[#f9f9fa] px-3 py-2.5 text-[12px] text-muted">
-          {!isPublic
+          {isPrivate
             ? "Private review — results are not saved and no share link is created."
             : "Stopped reviews are not saved — run the review to completion to get a share link."}
         </div>
@@ -115,8 +117,8 @@ export function SummaryCard({
   );
 }
 
-function ShareBlock({ headSha }: { headSha: string }) {
-  const url = `pr-reviewer.app/r/${headSha ? headSha.slice(0, 6) : "preview"}`;
+function ShareBlock({ slug }: { slug: string }) {
+  const url = `${window.location.origin}/r/${slug}`;
 
   return (
     <div className="mt-3.5 flex items-center gap-2.5 border-t border-[#f0f0f2] pt-3.5">
@@ -124,7 +126,7 @@ function ShareBlock({ headSha }: { headSha: string }) {
         Share
       </div>
       <div className="min-w-0 flex-1 truncate rounded-lg border border-border bg-[#f9f9fa] px-3 py-2 font-mono text-[12px] text-ink">
-        {url}
+        {url.replace(/^https?:\/\//, "")}
       </div>
       <CopyButton
         text={url}

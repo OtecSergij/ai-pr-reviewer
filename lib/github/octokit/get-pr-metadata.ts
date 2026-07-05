@@ -7,6 +7,7 @@ export type PRMetadata = {
   body: string | null;
   state: "open" | "closed";
   merged: boolean;
+  isPrivate: boolean;
   baseRef: string;
   headRef: string;
   headSha: string;
@@ -30,6 +31,7 @@ export async function getPRMetadata(
       body: data.body,
       state: data.state,
       merged: data.merged ?? false,
+      isPrivate: data.base.repo.private,
       baseRef: data.base.ref,
       headRef: data.head.ref,
       headSha: data.head.sha,
