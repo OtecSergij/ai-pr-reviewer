@@ -16,18 +16,27 @@ export type FailoverData = {
 
 export type UsageData = { tokens: number };
 
+export type ShareData = { slug: string };
+
 export type PRMeta = {
   owner: string;
   repo: string;
   prNumber: number;
   title: string;
   headSha: string;
+  isPrivate: boolean;
   model: string;
 };
 
 export type ReviewUIMessage = UIMessage<
   never,
-  { meta: PRMeta; files: PRFileSummary[]; failover: FailoverData; usage: UsageData } & {
+  {
+    meta: PRMeta;
+    files: PRFileSummary[];
+    failover: FailoverData;
+    usage: UsageData;
+    share: ShareData;
+  } & {
     [K in typeof ISSUE_DATA_KEY]: Issue;
   }
 >;

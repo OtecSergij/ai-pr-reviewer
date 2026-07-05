@@ -30,6 +30,7 @@ export default function Home() {
     meta,
     files,
     totalTokens,
+    shareSlug,
     run,
     stop,
     reset,
@@ -111,7 +112,8 @@ export default function Home() {
               stepCount={countSteps(transcript)}
               elapsed={elapsed}
               stopped={status === "aborted"}
-              isPublic={visibility === "public"}
+              isPrivate={meta?.isPrivate ?? visibility === "private"}
+              shareSlug={shareSlug}
             />
           ) : null}
 

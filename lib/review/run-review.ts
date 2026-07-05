@@ -26,6 +26,7 @@ import {
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
 import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
+import { saveReview } from "@/lib/db/reviews";
 import { ReviewUIMessage } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
@@ -47,6 +48,7 @@ export async function runReview({
     gh: GithubAccess,
     headSha: string,
     title: string,
+    isPrivate: boolean,
     prFiles: PRFileSummary[];
 
   try {
@@ -65,6 +67,7 @@ export async function runReview({
 
     headSha = prMetadata.headSha;
     title = prMetadata.title;
+    isPrivate = prMetadata.isPrivate;
     prFiles = await gh.getPRFiles();
   } catch (e) {
     const res = errorToResponse(e);
@@ -112,6 +115,7 @@ export async function runReview({
             prNumber: pr.prNumber,
             title,
             headSha,
+            isPrivate,
             model: candidates[i].modelId,
           },
           transient: true,
@@ -150,6 +154,29 @@ export async function runReview({
         }
 
         if (!failure) {
+          if (!isPrivate && !signal.aborted) {
+            let slug: string | null = null;
+            try {
+              slug = await saveReview({
+                owner: pr.owner,
+                repo: pr.repo,
+                prNumber: pr.prNumber,
+                headSha,
+                prTitle: title,
+                issues: [...UIIssues.values()],
+                provider: candidates[i].modelId,
+              });
+            } catch {
+              slug = null;
+            }
+            if (slug) {
+              writer.write({
+                type: "data-share",
+                data: { slug },
+                transient: true,
+              });
+            }
+          }
           return;
         }
 
