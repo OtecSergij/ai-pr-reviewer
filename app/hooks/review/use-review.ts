@@ -33,6 +33,7 @@ export function useReview() {
   const [meta, setMeta] = useState<PRMeta | null>(null);
   const [files, setFiles] = useState<PRFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
+  const [shareSlug, setShareSlug] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const transcriptRef = useRef<TranscriptEntry[]>([]);
@@ -64,6 +65,7 @@ export function useReview() {
     setMeta(null);
     setFiles([]);
     setTotalTokens(0);
+    setShareSlug(null);
   }, [flushTranscript]);
 
   const run = useCallback(
@@ -190,6 +192,10 @@ export function useReview() {
                 setTotalTokens((t) => t + chunk.data.tokens);
                 break;
 
+              case "data-share":
+                setShareSlug(chunk.data.slug);
+                break;
+
               case "text-start":
                 entries.push({ kind: "text", text: "" });
                 scheduleCommit();
@@ -293,5 +299,6 @@ export function useReview() {
     meta,
     files,
     totalTokens,
+    shareSlug,
   };
 }
