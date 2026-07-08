@@ -17,13 +17,16 @@ export const redis: RedisClient = buildClient();
 
 let connecting: Promise<void> | null = null;
 
-export function ensureRedisConnection(): void {
-  if (redis.isOpen || connecting) return;
-  connecting = redis
-    .connect()
-    .then(() => {})
-    .catch(() => {})
-    .finally(() => {
-      connecting = null;
-    });
+export function ensureRedisConnection(): Promise<void> {
+  if (redis.isOpen) return Promise.resolve();
+  if (!connecting) {
+    connecting = redis
+      .connect()
+      .then(() => {})
+      .catch(() => {})
+      .finally(() => {
+        connecting = null;
+      });
+  }
+  return connecting;
 }
