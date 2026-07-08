@@ -32,11 +32,13 @@ const EnvSchema = z.object({
 
 const parsed = EnvSchema.safeParse(process.env);
 
-if (!parsed.success) {
-  const bad = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
-  throw new Error(
-    `Invalid or missing environment variables: ${bad}. Check .env.local`,
-  );
-}
+export const env = (parsed.success ? parsed.data : {}) as z.infer<
+  typeof EnvSchema
+>;
 
-export const env = parsed.data;
+export function assertEnv(): void {
+  if (!parsed.success) {
+    const bad = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(`Invalid or missing environment variables: ${bad}`);
+  }
+}
