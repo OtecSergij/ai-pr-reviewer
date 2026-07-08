@@ -2,13 +2,20 @@
   "name": "pr-reviewer",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "tsx --env-file=.env.local migrate.ts",
+    "build:migrate": "esbuild migrate.ts --bundle --platform=node --format=esm --target=node24 --banner:js=\"import{createRequire}from'node:module';const require=createRequire(import.meta.url);\" --outfile=dist/migrate.mjs",
+    "build:startup": "esbuild validate-startup.ts --bundle --platform=node --format=esm --target=node24 --banner:js=\"import{createRequire}from'node:module';const require=createRequire(import.meta.url);\" --outfile=dist/validate-startup.mjs",
+    "build:scripts": "npm run build:migrate && npm run build:startup",
+    "lock:linux": "docker run --rm -v \"$PWD\":/w -w /w node:24-slim npm install --package-lock-only --ignore-scripts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
@@ -34,6 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
