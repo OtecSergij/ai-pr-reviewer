@@ -28,4 +28,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 
-ENTRYPOINT ["node", "--import", "./validate-startup.mjs", "server.js"]
+ENTRYPOINT ["sh", "-c", "node migrate.mjs && exec node --import ./validate-startup.mjs server.js"]
