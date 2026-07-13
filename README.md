@@ -1,34 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI PR Reviewer
 
-## Getting Started
+An AI agent that reviews public GitHub pull requests: it walks the repository, reads the changed files in context through multi-step tool calling, and streams back a review with each issue linked to the exact lines on GitHub.
 
-First, run the development server:
+**Live demo:** https://reviewer.zablotsky.dev
+
+## What it does
+
+- Paste a public PR URL — the agent fetches the PR, reads the diff and surrounding code via tool calls, and streams issues (error / warning / nit) incrementally as it finds them.
+- Every issue links to the exact `file:line` range on GitHub, so you can verify it.
+- Each completed review gets a shareable link (`/r/<slug>`) that renders the result.
+- Premium mode: bring your own Anthropic key to run the review on Claude Sonnet.
+
+## Stack
+
+- **Next.js 16** (App Router) + **Vercel AI SDK v6** — the review streams to the browser over SSE.
+- **Multiple model providers** (Cerebras / Groq / Gemini) with automatic fallback; premium path on Anthropic (BYO key).
+- **PostgreSQL + Drizzle** — persisted share links, with an idempotent slug derived from the PR identity.
+- **Redis** — per-IP rate limiting (sliding-window, multi-tier).
+- **Self-hosted** on a VPS via Coolify + Traefik: the image is built in CI, pushed to GHCR, and auto-deployed on push to `main`; the long-running review stream passes through the proxy incrementally.
+
+## Local development
+
+Requires a local PostgreSQL and Redis.
 
 ```bash
+cp .env.example .env.local   # provider keys, GITHUB_PAT, DATABASE_URL, REDIS_URL
+npm install
+npm run db:migrate           # apply Drizzle migrations
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open http://localhost:3000.
