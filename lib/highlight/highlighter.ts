@@ -1,4 +1,4 @@
-import type { BundledLanguage, BundledTheme } from "shiki/bundle/web";
+import type { BundledLanguage, BundledTheme } from "shiki/bundle/full";
 import type { SpecialLanguage, ThemedToken } from "shiki";
 
 const THEME: BundledTheme = "github-light";
@@ -19,62 +19,77 @@ const PRELOAD_LANGS: BundledLanguage[] = [
   "sql",
 ];
 
-const SUPPORTED = new Set<string>(PRELOAD_LANGS);
-
 const EXT_TO_LANG: Record<string, string> = {
-  ts: "typescript",
-  mts: "typescript",
-  cts: "typescript",
-  tsx: "tsx",
-  js: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
-  jsx: "jsx",
-  json: "json",
-  jsonc: "json",
-  md: "markdown",
-  mdx: "markdown",
-  css: "css",
-  scss: "scss",
-  html: "html",
   htm: "html",
-  yml: "yaml",
-  yaml: "yaml",
-  sh: "bash",
-  bash: "bash",
-  zsh: "bash",
-  py: "python",
-  sql: "sql",
+  h: "c",
+  hh: "cpp",
+  hpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  ex: "elixir",
+  exs: "elixir",
 };
 
-function resolveLang(raw: string): BundledLanguage | SpecialLanguage {
+type ShikiBundle = typeof import("shiki/bundle/full");
+type ShikiHighlighter = Awaited<
+  ReturnType<ShikiBundle["getSingletonHighlighter"]>
+>;
+
+type LoadedShiki = {
+  highlighter: ShikiHighlighter;
+  bundledLanguages: ShikiBundle["bundledLanguages"];
+};
+
+let shikiPromise: Promise<LoadedShiki> | null = null;
+
+function getShiki(): Promise<LoadedShiki> {
+  shikiPromise ??= import("shiki/bundle/full").then(async (shiki) => ({
+    highlighter: await shiki.getSingletonHighlighter({
+      themes: [THEME],
+      langs: PRELOAD_LANGS,
+    }),
+    bundledLanguages: shiki.bundledLanguages,
+  }));
+  return shikiPromise;
+}
+
+const langLoads = new Map<string, Promise<boolean>>(
+  PRELOAD_LANGS.map((lang) => [lang, Promise.resolve(true)])
+);
+
+function ensureLangLoaded(
+  highlighter: ShikiHighlighter,
+  lang: BundledLanguage
+): Promise<boolean> {
+  let loaded = langLoads.get(lang);
+  if (!loaded) {
+    loaded = highlighter.loadLanguage(lang).then(
+      () => true,
+      () => false
+    );
+    langLoads.set(lang, loaded);
+  }
+  return loaded;
+}
+
+async function resolveLang(
+  shiki: LoadedShiki,
+  raw: string
+): Promise<BundledLanguage | SpecialLanguage> {
   const key = (raw || "").toLowerCase();
   const candidate = EXT_TO_LANG[key] ?? key;
-  return SUPPORTED.has(candidate) ? (candidate as BundledLanguage) : "text";
-}
-
-async function loadHighlighter() {
-  const shiki = await import("shiki/bundle/web");
-  return shiki.getSingletonHighlighter({
-    themes: [THEME],
-    langs: PRELOAD_LANGS,
-  });
-}
-
-let highlighterPromise: ReturnType<typeof loadHighlighter> | null = null;
-
-function getHighlighter() {
-  highlighterPromise ??= loadHighlighter();
-  return highlighterPromise;
+  if (!Object.hasOwn(shiki.bundledLanguages, candidate)) return "text";
+  const lang = candidate as BundledLanguage;
+  return (await ensureLangLoaded(shiki.highlighter, lang)) ? lang : "text";
 }
 
 export async function highlightCode(
   code: string,
   rawLang: string
 ): Promise<ThemedToken[][]> {
-  const highlighter = await getHighlighter();
-  const { tokens } = highlighter.codeToTokens(code, {
-    lang: resolveLang(rawLang),
+  const shiki = await getShiki();
+  const { tokens } = shiki.highlighter.codeToTokens(code, {
+    lang: await resolveLang(shiki, rawLang),
     theme: THEME,
   });
   return tokens;

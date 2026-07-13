@@ -5,18 +5,15 @@
     -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
-  /* нейтральная шкала: текст от тёмного к светлому */
   --color-ink: #18181b;
   --color-ink-soft: #27272a;
   --color-muted: #57606a;
   --color-faint: #8c959f;
   --color-subtle: #a1a1aa;
-  /* границы и фоновые поверхности */
   --color-border: #e4e4e7;
   --color-border-subtle: #ebebee;
   --color-border-strong: #d4d4d8;
   --color-surface-subtle: #f4f4f5;
-  /* ссылки */
   --color-link: #0969da;
 
   --animate-fade-up: fade-up 0.5s ease both;

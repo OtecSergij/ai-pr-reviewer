@@ -33,7 +33,6 @@ base_ref – target branch.`,
           await gh.getPRMetadata();
         const truncatedBody = truncateBody(body);
 
-        // snake-проекция на LLM-границе: домен camelCase, модель ждёт snake.
         return {
           title,
           body: truncatedBody.body,
@@ -56,8 +55,6 @@ previous_filename: old file name, if it was renamed.`,
       execute: async () => {
         const files = await gh.getPRFiles();
 
-        // snake-проекция на LLM-границе: PRFileSummary внутри camelCase,
-        // модель ждёт previous_filename.
         return {
           files: files.map((f) => ({
             filename: f.filename,

@@ -14,20 +14,13 @@ import type { ModelIssue } from "@/lib/review/model-issue.schema";
 import type { ReviewUIMessage } from "@/lib/review/stream";
 import { errorToMessage } from "@/lib/review/errors";
 
-// Вставлять этот URL в форму при MOCK_REVIEW=1.
-// vercel/ms#35 — merged в 2014-м, 3 файла (index.js, test/test.js, README.md),
-// у всех непустой patch; PR старый и закрытый, координаты фикстур ниже вечные.
 export const MOCK_PR_URL = "https://github.com/vercel/ms/pull/35";
 
-// Паузы между событиями стрима — имитируют темп реального LLM.
-const TEXT_DELTA_PAUSE_MS = 150; // между text-delta внутри блока
-const EVENT_PAUSE_MS = 250; // перед началом текстового блока
-const TOOL_PAUSE_MS = 500; // «модель решает дёрнуть тул»
+const TEXT_DELTA_PAUSE_MS = 150;
+const EVENT_PAUSE_MS = 250;
+const TOOL_PAUSE_MS = 500;
 
-// Фикстурные issue указывают на реальные added-строки PR vercel/ms#35.
 export const mockModelIssues: ModelIssue[] = [
-  // index.js, hunk @@ -53,16 +55,26 @@: строки 74–77 новой версии — это
-  // added-блок `case 'milliseconds':` … `case 'msec':`.
   {
     file: "index.js",
     line_start: 74,
@@ -38,8 +31,6 @@ export const mockModelIssues: ModelIssue[] = [
     suggestion:
       "```js\nvar factors = {\n  ms: 1, msec: 1, msecs: 1, millisecond: 1, milliseconds: 1,\n  s: s, sec: s, secs: s, second: s, seconds: s,\n  // … same for the other units\n};\nreturn n * factors[type];\n```",
   },
-  // test/test.js, hunk @@ -52,6 +56,38 @@: строка 61 новой версии — added-строка
-  // `describe('ms(long string)', function(){`.
   {
     file: "test/test.js",
     line_start: 61,
@@ -50,22 +41,14 @@ export const mockModelIssues: ModelIssue[] = [
   },
 ];
 
-// Тот же тип options, что у настоящего streamText, — вызов в route
-// компилируется без изменений при подмене реализации.
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
-// Ровно тот тип чанков, который цикл ревью пишет в writer.
 type MockChunk = InferUIMessageChunk<ReviewUIMessage>;
 
-// Мок структурно реализует лишь то, что дёргает цикл ревью
-// (toUIMessageStream + колбэки из options), поэтому приводим его к полному типу
-// streamText через unknown — иначе union `mock | real` в run-review не сойдётся.
 export const streamTextMock = ((options: StreamTextOptions) => ({
   toUIMessageStream: () => mockUIStream(options),
 })) as unknown as typeof streamText;
 
-// Async-генератор, а не ReadableStream: цикл ревью потребляет результат через
-// `for await`, а web-ReadableStream в TS-типах не async-iterable.
 async function* mockUIStream(
   options: StreamTextOptions
 ): AsyncGenerator<MockChunk> {
@@ -74,17 +57,11 @@ async function* mockUIStream(
       yield chunk;
     }
   } catch (e) {
-    // Настоящий streamText на сбое и дёргает options.onError, и кладёт error-чанк
-    // в стрим. Мок делает то же: onError выставляет флаг детекта в цикле, а
-    // сам error-чанк цикл отфильтрует.
     options.onError?.({ error: e });
     yield { type: "error", errorText: errorToMessage(e) };
   }
 }
 
-// Dev-only фабрика инъектируемых ошибок (MOCK_ERROR) для проверки пути 2.
-// Классы настоящие — иначе .isInstance в errorToMessage вернёт false и
-// классификация не сработает.
 function injectedError(): unknown {
   const apiUrl = "https://mock.provider/v1/messages";
 
@@ -128,17 +105,11 @@ function injectedError(): unknown {
   }
 }
 
-// Сценарий ревью: те же типы чанков и в том же порядке, что у настоящего
-// streamText + клиентского switch в use-review.ts (text-start даёт разрыв
-// абзаца, tool-input-available — строку активности, data-issue придёт
-// из настоящего emit_issue.execute).
 async function* reviewScenario(
   options: StreamTextOptions
 ): AsyncGenerator<MockChunk> {
   const { tools, abortSignal: signal } = options;
 
-  // Dev-инъекция ошибки (MOCK_ERROR): бросаем типизированную ошибку, чтобы
-  // прогнать её через реальный onError → errorToMessage пути 2.
   const injected = injectedError();
   if (injected) throw injected;
 
@@ -147,9 +118,6 @@ async function* reviewScenario(
     return;
   }
 
-  // Настоящий streamText гоняет input через zod до execute, мок зовёт execute
-  // напрямую — поэтому фикстуры проверяем сами: правка координат/полей упадёт
-  // громко (error-чанком), а не нарисует мусор в карточках.
   for (const issue of mockModelIssues) modelIssueSchema.parse(issue);
 
   yield { type: "start" };
@@ -246,8 +214,6 @@ async function* reviewScenario(
   yield { type: "finish", finishReason: "stop" };
 }
 
-// Dev-демо (MOCK_ERROR=tool-outcomes): показать исходы тулзов в консоли —
-// реальный {status} (skipped) и синтетический tool-output-error (failed).
 async function* toolOutcomesDemo(
   tools: StreamTextOptions["tools"],
   signal?: AbortSignal
@@ -333,16 +299,13 @@ async function callTool(
   toolCallId: string,
   signal?: AbortSignal
 ): Promise<unknown> {
-  // В ToolSet execute опционален и типизирован в том числе под never-инпуты,
-  // поэтому сужаем до общей формы сами (без `!`): мок передаёт корректные
-  // инпуты по построению, важен рантайм-вызов.
   const execute = tools?.[toolName]?.execute as
     | ToolExecuteFunction<unknown, unknown>
     | undefined;
 
   if (!execute) {
     throw new Error(
-      `streamTextMock: tool "${toolName}" has no execute — мок умеет звать только реальные тулзы route`
+      `streamTextMock: tool "${toolName}" has no execute — the mock can only call the real route tools`
     );
   }
 
@@ -355,8 +318,6 @@ async function callTool(
   return await execute(input, callOptions);
 }
 
-// Пауза, не переживающая abort: по сигналу резолвится сразу и снимает таймер,
-// чтобы остановка клиента не оставляла подвисших setTimeout.
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal?.aborted) {

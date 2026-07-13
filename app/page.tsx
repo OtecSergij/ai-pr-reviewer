@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useReview } from "@/app/hooks/review/use-review";
+import { useCallback, useRef, useState } from "react";
+import {
+  useReview,
+  type ReviewRunOptions,
+} from "@/app/hooks/review/use-review";
 import { useElapsed } from "@/app/hooks/review/use-elapsed";
 import { countSteps } from "@/lib/review/transcript";
 import type { SeverityFilter } from "./components/severity-filters";
@@ -43,12 +46,15 @@ export default function Home() {
   }, []);
   const onClearFileFilter = useCallback(() => setFileFilter(null), []);
 
-  function start(anthropicKey?: string) {
+  const lastRunOptionsRef = useRef<ReviewRunOptions>({});
+
+  function start(options: ReviewRunOptions = {}) {
     const trimmed = url.trim();
     if (!trimmed) return;
+    lastRunOptionsRef.current = options;
     setSeverityFilter("all");
     setFileFilter(null);
-    run(trimmed, anthropicKey);
+    run(trimmed, options);
   }
 
   if (status === "idle") {
@@ -99,7 +105,7 @@ export default function Home() {
               kind={errorKind ?? "review"}
               message={error}
               onEditUrl={reset}
-              onTryAgain={start}
+              onTryAgain={() => start(lastRunOptionsRef.current)}
             />
           ) : null}
 

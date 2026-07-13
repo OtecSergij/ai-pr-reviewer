@@ -10,10 +10,6 @@ type SeverityStyle = {
   dot: string;
 };
 
-// Единственный источник статус/severity tone-литералов: одни и те же пары
-// bg/fg используются и в SEVERITY_STYLES (по severity), и в statusBadge (по
-// статусу прогона). Маппинги остаются разными сущностями — общими делаем только
-// значения, чтобы оттенки не разъезжались при правках.
 export const TONE = {
   success: { bg: "#dafbe1", fg: "#1a7f37" },
   warning: { bg: "#fff8c5", fg: "#9a6700" },

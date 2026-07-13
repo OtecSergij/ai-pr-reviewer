@@ -35,11 +35,13 @@ export async function runReview({
   prUrl,
   signal,
   anthropicKey,
+  githubPat,
   ip,
 }: {
   prUrl: string;
   signal: AbortSignal;
   anthropicKey?: string;
+  githubPat?: string;
   ip: string;
 }): Promise<Response> {
   const candidates = selectModels(anthropicKey);
@@ -54,7 +56,7 @@ export async function runReview({
   try {
     pr = parsePRUrl(prUrl);
 
-    gh = createGithubAccess(env.GITHUB_PAT, pr);
+    gh = createGithubAccess(githubPat ?? env.GITHUB_PAT, pr);
 
     const prMetadata = await gh.getPRMetadata();
 

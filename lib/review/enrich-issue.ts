@@ -85,7 +85,6 @@ export async function enrichIssue(
     lineStart: issue.line_start,
     lineEnd: issue.line_end,
     blobUrl: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
-    // TODO: ext→Shiki-lang таблица + валидный fallback (с UI, Блок 3 — нужен список bundledLanguages)
     language: issue.file.split(".").pop() || "text",
     codeLines,
   };
