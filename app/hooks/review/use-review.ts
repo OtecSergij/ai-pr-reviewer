@@ -16,6 +16,11 @@ import type {
 
 type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
 
+export type ReviewRunOptions = {
+  anthropicKey?: string;
+  githubPat?: string;
+};
+
 function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
   return entries.find(
     (e): e is Extract<TranscriptEntry, { kind: "tool" }> =>
@@ -69,7 +74,7 @@ export function useReview() {
   }, [flushTranscript]);
 
   const run = useCallback(
-    async (prUrl: string, anthropicKey?: string) => {
+    async (prUrl: string, options: ReviewRunOptions = {}) => {
       if (abortRef.current) return;
 
       clearReviewState();
@@ -82,7 +87,11 @@ export function useReview() {
         const res = await fetch("/api/review", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ prUrl, anthropicKey }),
+          body: JSON.stringify({
+            prUrl,
+            anthropicKey: options.anthropicKey,
+            githubPat: options.githubPat,
+          }),
           signal: ac.signal,
         });
 

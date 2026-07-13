@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import type { ReviewRunOptions } from "@/app/hooks/review/use-review";
 
 type IdleScreenProps = {
   url: string;
   onUrlChange: (url: string) => void;
   visibility: "public" | "private";
   onVisibilityChange: (v: "public" | "private") => void;
-  onStart: (anthropicKey?: string) => void;
+  onStart: (options: ReviewRunOptions) => void;
 };
 
 const INPUT_CLASS =
@@ -26,7 +27,11 @@ export function IdleScreen({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    onStart(premium && premiumKey.trim() ? premiumKey.trim() : undefined);
+    onStart({
+      anthropicKey: premium && premiumKey.trim() ? premiumKey.trim() : undefined,
+      githubPat:
+        visibility === "private" && pat.trim() ? pat.trim() : undefined,
+    });
   }
 
   return (
@@ -67,7 +72,6 @@ export function IdleScreen({
           </div>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-[18px]">
-            {/* СТАБ (тема 7): селектор public/private — пока только визуал */}
             <div className="flex gap-0.5 rounded-lg bg-surface-subtle p-[3px]">
               {(["public", "private"] as const).map((v) => {
                 const active = visibility === v;
@@ -88,7 +92,6 @@ export function IdleScreen({
               })}
             </div>
 
-            {/* СТАБ (тема 8): выбор премиум-модели — пока только визуал */}
             <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
               <input
                 type="checkbox"
@@ -100,13 +103,13 @@ export function IdleScreen({
             </label>
           </div>
 
-          {/* СТАБ (тема 7): поле PAT для private PR */}
           {visibility === "private" ? (
             <div className="animate-fade-up mt-3">
               <input
                 type="password"
                 value={pat}
-                onChange={(e) => setPat(e.target.value)}
+                onChange={(e) => setPat(e.target.value.trim())}
+                required
                 placeholder="GitHub personal access token (ghp_…)"
                 aria-label="GitHub personal access token"
                 className={INPUT_CLASS}
@@ -126,7 +129,6 @@ export function IdleScreen({
             </div>
           ) : null}
 
-          {/* СТАБ (тема 8): поле Anthropic-ключа */}
           {premium ? (
             <div className="animate-fade-up mt-3">
               <input

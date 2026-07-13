@@ -14,8 +14,6 @@ const BLOCK_COMPONENTS: Components = {
     </p>
   ),
   code: ({ className, children }) => {
-    // fenced block without a language tag has no language-* class, so fall back
-    // to the newline: block code is multiline, inline code never is
     const isBlock =
       /language-/.test(className ?? "") ||
       (typeof children === "string" && children.includes("\n"));

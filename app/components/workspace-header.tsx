@@ -97,7 +97,6 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
         </div>
       ) : null}
 
-      {/* провайдер-pill: реальная модель из стрима (meta.model) */}
       {meta ? (
         <div className="shrink-0 rounded-full border border-border bg-white px-2.5 py-1 font-mono text-[11px] text-muted">
           {meta.model}
