@@ -2,7 +2,7 @@
 
 An AI agent that reviews public GitHub pull requests: it walks the repository, reads the changed files in context through multi-step tool calling, and streams back a review with each issue linked to the exact lines on GitHub.
 
-**Live demo:** https://reviewer.zablotsky.dev
+**Live demo:** https://reviewer.zablotsky.dev/
 
 ## What it does
 
