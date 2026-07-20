@@ -28,7 +28,8 @@ export function IdleScreen({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     onStart({
-      anthropicKey: premium && premiumKey.trim() ? premiumKey.trim() : undefined,
+      anthropicKey:
+        premium && premiumKey.trim() ? premiumKey.trim() : undefined,
       githubPat:
         visibility === "private" && pat.trim() ? pat.trim() : undefined,
     });
@@ -145,11 +146,6 @@ export function IdleScreen({
             </div>
           ) : null}
         </form>
-
-        <p className="mt-4 text-[12px] leading-[1.5] text-faint">
-          AI-generated review — may contain mistakes. Every issue links to the
-          exact lines on GitHub so you can verify.
-        </p>
       </div>
     </div>
   );
