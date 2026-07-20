@@ -3,7 +3,19 @@ import type { FailoverData } from "@/lib/review/stream";
 
 export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 
-export type ErrorKind = "load" | "rate-limit" | "review";
+const ERROR_KINDS = [
+  "load",
+  "rate-limit",
+  "review",
+  "private",
+  "too-many-files",
+] as const;
+
+export type ErrorKind = (typeof ERROR_KINDS)[number];
+
+export function isErrorKind(value: string): value is ErrorKind {
+  return (ERROR_KINDS as readonly string[]).includes(value);
+}
 
 export type ToolOutcome = "running" | "ok" | "skipped" | "failed";
 

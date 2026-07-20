@@ -9,7 +9,9 @@ function buildClient(): RedisClient {
     url: env.REDIS_URL,
     disableOfflineQueue: true,
   });
-  client.on("error", () => {});
+  client.on("error", (error) => {
+    console.error("[redis] client error", error);
+  });
   return client;
 }
 
@@ -23,7 +25,9 @@ export function ensureRedisConnection(): Promise<void> {
     connecting = redis
       .connect()
       .then(() => {})
-      .catch(() => {})
+      .catch((error) => {
+        console.error("[redis] connection attempt failed", error);
+      })
       .finally(() => {
         connecting = null;
       });

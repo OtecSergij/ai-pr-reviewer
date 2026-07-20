@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import { connection } from "next/server";
 import "./globals.css";
 
 const instrumentSans = Instrument_Sans({
@@ -18,11 +19,12 @@ export const metadata: Metadata = {
     "Paste a GitHub pull request link — an AI agent walks the repository, reads the changes in context, and streams back a review.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
     <html
       lang="en"

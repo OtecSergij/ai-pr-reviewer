@@ -1,14 +1,15 @@
 # AI PR Reviewer
 
-An AI agent that reviews public GitHub pull requests: it walks the repository, reads the changed files in context through multi-step tool calling, and streams back a review with each issue linked to the exact lines on GitHub.
+An AI agent that reviews GitHub pull requests: it walks the repository, reads the changed files in context through multi-step tool calling, and streams back a review with each issue linked to the exact lines on GitHub.
 
 **Live demo:** https://reviewer.zablotsky.dev/
 
 ## What it does
 
-- Paste a public PR URL — the agent fetches the PR, reads the diff and surrounding code via tool calls, and streams issues (error / warning / nit) incrementally as it finds them.
+- Paste a PR URL — the agent fetches the PR, reads the diff and surrounding code via tool calls, and streams issues (error / warning / nit) incrementally as it finds them.
 - Every issue links to the exact `file:line` range on GitHub, so you can verify it.
-- Each completed review gets a shareable link (`/r/<slug>`) that renders the result.
+- Each completed public review gets a shareable link (`/r/<slug>`) that renders the result.
+- Private mode: bring your own GitHub token (`repo` scope) to review a private PR — the token is used in-memory for that single request and never stored. Private reviews aren't persisted and get no share link.
 - Premium mode: bring your own Anthropic key to run the review on Claude Sonnet.
 
 ## Stack

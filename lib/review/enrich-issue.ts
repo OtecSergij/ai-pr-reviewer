@@ -4,6 +4,7 @@ import type { Issue, CodeLine } from "./issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 import { parseUnifiedDiff } from "@/lib/github/diff";
 import { createHash } from "node:crypto";
+import type { Logger } from "pino";
 
 const WINDOW = 3;
 
@@ -49,13 +50,15 @@ function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
 
 async function buildCodeLines(
   gh: GithubAccess,
-  issue: ModelIssue
+  issue: ModelIssue,
+  log: Logger
 ): Promise<CodeLine[]> {
   try {
     const patch = await gh.getDiff(issue.file);
     if (!patch) return [];
     return sliceFromDiff(patch, issue) ?? [];
-  } catch {
+  } catch (e) {
+    log.warn({ err: e, file: issue.file }, "buildCodeLines failed");
     return [];
   }
 }
@@ -63,9 +66,10 @@ async function buildCodeLines(
 export async function enrichIssue(
   gh: GithubAccess,
   repo: RepoContext,
-  issue: ModelIssue
+  issue: ModelIssue,
+  log: Logger
 ): Promise<Issue> {
-  const codeLines = await buildCodeLines(gh, issue);
+  const codeLines = await buildCodeLines(gh, issue, log);
 
   const id = createHash("sha256")
     .update(

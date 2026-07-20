@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 const EVAL_TIMEOUT_MS = 500;
+const CONNECT_TIMEOUT_MS = 2_000;
 
 type Tier = {
   label: string;
@@ -49,39 +50,64 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
   return {
     async check(id: string): Promise<RateLimitGate> {
       try {
-        ensureRedisConnection();
+        const connectTimeout = timeoutAfter(CONNECT_TIMEOUT_MS);
+        try {
+          await Promise.race([
+            ensureRedisConnection(),
+            connectTimeout.promise,
+          ]);
+        } finally {
+          connectTimeout.cancel();
+        }
         if (!redis.isReady) return { allowed: true };
 
-        const reply = (await Promise.race([
-          redis.eval(CHECK_AND_CONSUME, {
-            keys: tiers.map((tier) => `${prefix}:${tier.label}:${id}`),
-            arguments: [
-              String(Date.now()),
-              crypto.randomUUID(),
-              ...tiers.flatMap((tier) => [
-                String(tier.windowMs),
-                String(tier.limit),
-              ]),
-            ],
-          }),
-          timeoutAfter(EVAL_TIMEOUT_MS),
-        ])) as [number, number, number];
+        const evalTimeout = timeoutAfter(EVAL_TIMEOUT_MS);
+        let reply: [number, number, number];
+        try {
+          reply = (await Promise.race([
+            redis.eval(CHECK_AND_CONSUME, {
+              keys: tiers.map((tier) => `${prefix}:${tier.label}:${id}`),
+              arguments: [
+                String(Date.now()),
+                crypto.randomUUID(),
+                ...tiers.flatMap((tier) => [
+                  String(tier.windowMs),
+                  String(tier.limit),
+                ]),
+              ],
+            }),
+            evalTimeout.promise,
+          ])) as [number, number, number];
+        } finally {
+          evalTimeout.cancel();
+        }
 
         const [allowed, , retryAfterMs] = reply;
         if (allowed === 1) return { allowed: true };
 
         return { allowed: false, retryAfterMs };
-      } catch {
+      } catch (error) {
+        console.error(`[rate-limit] ${prefix}: Redis check failed, allowing request`, error);
         return { allowed: true };
       }
     },
   };
 }
 
-function timeoutAfter(ms: number): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(reject, ms, new Error("rate limiter timed out"));
+function timeoutAfter(ms: number): {
+  promise: Promise<never>;
+  cancel: () => void;
+} {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const promise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("rate limiter timed out")), ms);
   });
+  return {
+    promise,
+    cancel: () => {
+      if (timer !== undefined) clearTimeout(timer);
+    },
+  };
 }
 
 function formatWait(ms: number): string {

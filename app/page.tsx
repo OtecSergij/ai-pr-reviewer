@@ -34,6 +34,7 @@ export default function Home() {
     files,
     totalTokens,
     shareSlug,
+    requestId,
     run,
     stop,
     reset,
@@ -104,6 +105,7 @@ export default function Home() {
             <ErrorCard
               kind={errorKind ?? "review"}
               message={error}
+              requestId={requestId}
               onEditUrl={reset}
               onTryAgain={() => start(lastRunOptionsRef.current)}
             />

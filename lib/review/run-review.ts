@@ -27,6 +27,8 @@ import {
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
 import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
 import { saveReview } from "@/lib/db/reviews";
+import { logger } from "@/lib/log";
+import type { ErrorKind } from "@/lib/review/transcript";
 import { ReviewUIMessage } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
@@ -37,13 +39,17 @@ export async function runReview({
   anthropicKey,
   githubPat,
   ip,
+  requestId,
 }: {
   prUrl: string;
   signal: AbortSignal;
   anthropicKey?: string;
   githubPat?: string;
   ip: string;
+  requestId: string;
 }): Promise<Response> {
+  const log = logger.child({ requestId });
+  const startedAt = Date.now();
   const candidates = selectModels(anthropicKey);
 
   let pr: PRRef,
@@ -60,10 +66,33 @@ export async function runReview({
 
     const prMetadata = await gh.getPRMetadata();
 
+    if (prMetadata.isPrivate && !githubPat) {
+      log.info(
+        { owner: pr.owner, repo: pr.repo, prNumber: pr.prNumber },
+        "review rejected: private PR without token"
+      );
+      return new Response(
+        "Reviewing a private PR needs your own GitHub token.",
+        { status: 403, headers: { "x-review-error": "private" satisfies ErrorKind } }
+      );
+    }
+
     if (prMetadata.changedFiles > MAX_CHANGED_FILES) {
+      log.info(
+        {
+          owner: pr.owner,
+          repo: pr.repo,
+          prNumber: pr.prNumber,
+          changedFiles: prMetadata.changedFiles,
+        },
+        "review rejected: too many changed files"
+      );
       return new Response(
         `Too many files changed. PR size must be less than ${MAX_CHANGED_FILES} files.`,
-        { status: 400 }
+        {
+          status: 400,
+          headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
+        }
       );
     }
 
@@ -73,7 +102,10 @@ export async function runReview({
     prFiles = await gh.getPRFiles();
   } catch (e) {
     const res = errorToResponse(e);
-    if (res) return res;
+    if (res) {
+      log.warn({ err: e }, "review rejected before stream");
+      return res;
+    }
     throw e;
   }
 
@@ -83,6 +115,7 @@ export async function runReview({
 
   const gate = await reviewLimiter.check(ip);
   if (!gate.allowed) {
+    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
     return rateLimitResponse(gate);
   }
 
@@ -105,7 +138,7 @@ export async function runReview({
         transient: true,
       });
 
-      const tools = createReviewTools(gh, UIIssues, repo, writer);
+      const tools = createReviewTools(gh, UIIssues, repo, writer, log);
       const streamMessages: ModelMessage[] = [...messages];
 
       for (let i = 0; i < candidates.length; i++) {
@@ -168,7 +201,17 @@ export async function runReview({
                 issues: [...UIIssues.values()],
                 provider: candidates[i].modelId,
               });
-            } catch {
+            } catch (e) {
+              log.error(
+                {
+                  err: e,
+                  owner: pr.owner,
+                  repo: pr.repo,
+                  prNumber: pr.prNumber,
+                  headSha,
+                },
+                "saveReview failed"
+              );
               slug = null;
             }
             if (slug) {
@@ -179,6 +222,17 @@ export async function runReview({
               });
             }
           }
+          log.info(
+            {
+              owner: pr.owner,
+              repo: pr.repo,
+              prNumber: pr.prNumber,
+              provider: candidates[i].modelId,
+              issues: UIIssues.size,
+              durationMs: Date.now() - startedAt,
+            },
+            "review finished"
+          );
           return;
         }
 
@@ -189,6 +243,16 @@ export async function runReview({
         }
 
         if (i < candidates.length - 1 && knownError.hop) {
+          log.warn(
+            {
+              err: failure,
+              from: candidates[i].provider,
+              to: candidates[i + 1].provider,
+              reason: knownError.reason,
+            },
+            "provider failover"
+          );
+
           writer.write({
             type: "data-failover",
             transient: true,
@@ -202,6 +266,15 @@ export async function runReview({
           streamMessages.push(...sanitizeForHandoff(stepMessages));
           continue;
         }
+
+        log.error(
+          {
+            err: failure,
+            reason: knownError.reason,
+            provider: candidates[i].modelId,
+          },
+          "review failed after providers exhausted"
+        );
 
         writer.write({ type: "error", errorText: errorToMessage(failure) });
         return;

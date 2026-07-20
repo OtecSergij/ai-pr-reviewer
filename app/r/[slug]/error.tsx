@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 export default function SharedReviewError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -34,6 +35,12 @@ export default function SharedReviewError({
             Something went wrong on our side. This is usually temporary — try
             again in a moment.
           </p>
+
+          {error.digest ? (
+            <p className="mt-2 text-[12px] text-faint">
+              Error ID: <span className="font-mono">{error.digest}</span>
+            </p>
+          ) : null}
 
           <div className="mt-3.5 flex gap-2">
             <button

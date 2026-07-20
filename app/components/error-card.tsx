@@ -1,25 +1,49 @@
+import type { ReactNode } from "react";
 import type { ErrorKind } from "@/lib/review/transcript";
 
 type ErrorCardProps = {
   kind: ErrorKind;
   message: string | null;
+  requestId?: string | null;
   onEditUrl: () => void;
   onTryAgain: () => void;
+};
+
+const HEADLINES: Record<ErrorKind, string> = {
+  load: "Couldn’t load this pull request",
+  "rate-limit": "Rate limit reached",
+  private: "This pull request is private",
+  review: "Review failed",
+  "too-many-files": "This PR is too large to review",
+};
+
+const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
+  load: (
+    <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+      Check that the link looks like{" "}
+      <span className="rounded-[5px] bg-surface-subtle px-1.5 py-px font-mono text-[12px] text-muted">
+        github.com/owner/repo/pull/123
+      </span>{" "}
+      and points to a PR you can open. If it’s private, switch to Private PR and
+      use a token with the <span className="font-mono">repo</span> scope.
+    </p>
+  ),
+  private: (
+    <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+      Switch to Private PR and paste a token with the{" "}
+      <span className="font-mono">repo</span> scope. The token is used only for
+      this request and never stored.
+    </p>
+  ),
 };
 
 export function ErrorCard({
   kind,
   message,
+  requestId,
   onEditUrl,
   onTryAgain,
 }: ErrorCardProps) {
-  const isLoad = kind === "load";
-  const headline = isLoad
-    ? "Couldn’t load this pull request"
-    : kind === "rate-limit"
-      ? "Rate limit reached"
-      : "Review failed";
-
   return (
     <div className="animate-card-in rounded-xl border border-[#ffd1ce] bg-white p-[18px]">
       <div className="flex items-center gap-2.5">
@@ -27,7 +51,7 @@ export function ErrorCard({
           !
         </div>
         <div className="text-[16px] font-bold tracking-[-0.01em]">
-          {headline}
+          {HEADLINES[kind]}
         </div>
       </div>
 
@@ -37,14 +61,11 @@ export function ErrorCard({
         </p>
       ) : null}
 
-      {isLoad ? (
-        <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
-          Check that the link looks like{" "}
-          <span className="rounded-[5px] bg-surface-subtle px-1.5 py-px font-mono text-[12px] text-muted">
-            github.com/owner/repo/pull/123
-          </span>{" "}
-          and that the PR is public — or switch to Private PR and provide a token
-          with the <span className="font-mono">repo</span> scope.
+      {HINTS[kind]}
+
+      {kind === "review" && requestId ? (
+        <p className="mt-2 text-[12px] text-faint">
+          Request ID: <span className="font-mono">{requestId}</span>
         </p>
       ) : null}
 

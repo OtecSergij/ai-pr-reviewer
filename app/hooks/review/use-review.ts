@@ -13,6 +13,7 @@ import type {
   ReviewStatus,
   TranscriptEntry,
 } from "@/lib/review/transcript";
+import { isErrorKind } from "@/lib/review/transcript";
 
 type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
 
@@ -28,6 +29,14 @@ function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
   );
 }
 
+function errorKindFromResponse(res: Response): ErrorKind {
+  const header = res.headers.get("x-review-error");
+  if (header && isErrorKind(header)) return header;
+  if (res.status === 429) return "rate-limit";
+  if (res.status >= 500) return "review";
+  return "load";
+}
+
 export function useReview() {
   const [status, setStatus] = useState<ReviewStatus>("idle");
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -39,6 +48,7 @@ export function useReview() {
   const [files, setFiles] = useState<PRFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const transcriptRef = useRef<TranscriptEntry[]>([]);
@@ -71,6 +81,7 @@ export function useReview() {
     setFiles([]);
     setTotalTokens(0);
     setShareSlug(null);
+    setRequestId(null);
   }, [flushTranscript]);
 
   const run = useCallback(
@@ -95,10 +106,12 @@ export function useReview() {
           signal: ac.signal,
         });
 
+        setRequestId(res.headers.get("x-request-id"));
+
         if (!res.ok || !res.body) {
           const text = (await res.text().catch(() => "")).trim();
           setError(text || null);
-          setErrorKind(res.status === 429 ? "rate-limit" : "load");
+          setErrorKind(errorKindFromResponse(res));
           setStatus("error");
           return;
         }
@@ -309,5 +322,6 @@ export function useReview() {
     files,
     totalTokens,
     shareSlug,
+    requestId,
   };
 }

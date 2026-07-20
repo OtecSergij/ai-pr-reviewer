@@ -6,6 +6,7 @@ import {
 import type { Issue } from "@/lib/review/issue";
 import { tool, UIMessageStreamWriter } from "ai";
 import { z } from "zod";
+import type { Logger } from "pino";
 import { truncateBody } from "./truncate-body";
 import { modelIssueSchema } from "@/lib/review/model-issue.schema";
 import type { ReviewUIMessage } from "@/lib/review/stream";
@@ -17,7 +18,8 @@ export function createReviewTools(
   gh: GithubAccess,
   UIIssues: Map<string, Issue>,
   repo: RepoContext,
-  writer: UIMessageStreamWriter<ReviewUIMessage>
+  writer: UIMessageStreamWriter<ReviewUIMessage>,
+  log: Logger
 ) {
   return {
     get_pr_metadata: tool({
@@ -157,7 +159,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
         "Report a single code-review issue you found in this PR. Call it once per issue, the moment you have confirmed a problem — do not batch issues for the end, and never write issues as plain text. You provide the location (file + line range) and the explanation; the code snippet is added by the backend, so do not send code. Reporting the same issue twice is safe — the repeat is ignored and the result has duplicate: true, so there is no need to resend it.",
       inputSchema: modelIssueSchema,
       execute: async (input) => {
-        const data = await enrichIssue(gh, repo, input);
+        const data = await enrichIssue(gh, repo, input, log);
         if (UIIssues.has(data.id)) {
           return { ok: true, duplicate: true };
         }
