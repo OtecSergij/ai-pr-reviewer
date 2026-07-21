@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const DEFAULT_APP_URL = "http://localhost:3000";
+
 const EnvSchema = z.object({
   GITHUB_PAT: z.string().min(1),
   CEREBRAS_API_KEY: z.string().min(1),
@@ -13,7 +15,7 @@ const EnvSchema = z.object({
     .transform((v) => v === "1"),
   APP_URL: z.preprocess(
     (v) => (v === "" ? undefined : v),
-    z.string().url().default("http://localhost:3000")
+    z.string().url().default(DEFAULT_APP_URL)
   ),
   MOCK_REVIEW: z
     .string()

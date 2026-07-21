@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import { connection } from "next/server";
-import { env } from "@/lib/env";
+import { env, DEFAULT_APP_URL } from "@/lib/env";
 import "./globals.css";
 
 const instrumentSans = Instrument_Sans({
@@ -19,7 +19,7 @@ const description =
   "Paste a GitHub pull request link — an AI agent walks the repository, reads the changes in context, and streams back a review.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(env.APP_URL),
+  metadataBase: new URL(env.APP_URL || DEFAULT_APP_URL),
   title,
   description,
   openGraph: {
