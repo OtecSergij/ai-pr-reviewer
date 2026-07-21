@@ -36,7 +36,7 @@ export async function getFileContents(
       );
     }
 
-    if (data.encoding !== "base64" || data.content === "") {
+    if (data.encoding !== "base64") {
       throw new GitHubApiError(
         200,
         `Cannot read file at ${path}: encoding=${data.encoding}, size=${data.size}. ` +
