@@ -1,5 +1,6 @@
 import type { CodeLineKind, Issue } from "@/lib/review/issue";
 import type { PRFileStatus } from "@/lib/review/stream";
+import { countBySeverity } from "@/lib/review/issue-stats";
 
 type SeverityStyle = {
   label: string;
@@ -58,6 +59,23 @@ export const SEVERITY_ORDER: ReadonlyArray<Issue["severity"]> = [
   "nit",
   "suggestion",
 ];
+
+export type SeverityPill = { severity: Issue["severity"]; label: string };
+
+export function severityPills(issues: Issue[]): SeverityPill[] {
+  const counts = countBySeverity(issues);
+  return SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => {
+    const n = counts.get(s) ?? 0;
+    return {
+      severity: s,
+      label: `${n} ${
+        n === 1
+          ? SEVERITY_STYLES[s].label.toLowerCase()
+          : SEVERITY_STYLES[s].plural
+      }`,
+    };
+  });
+}
 
 type CodeLineStyle = { bg: string; sign: string; signColor: string };
 

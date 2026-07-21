@@ -4,8 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getReview, isReviewSlug } from "@/lib/db/reviews";
 import { IssueCard } from "@/app/components/issue-card";
-import { SEVERITY_ORDER, SEVERITY_STYLES } from "@/app/components/review-theme";
-import { countBySeverity } from "@/lib/review/issue-stats";
+import { SEVERITY_STYLES, severityPills } from "@/app/components/review-theme";
 
 const loadReview = cache(async (slug: string) =>
   isReviewSlug(slug) ? getReview(slug) : null
@@ -17,9 +16,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const review = await loadReview(slug);
   if (!review) return {};
+  const title = `AI review — ${review.owner}/${review.repo}#${review.prNumber}`;
+  const description = review.prTitle;
   return {
-    title: `AI review — ${review.owner}/${review.repo}#${review.prNumber}`,
-    description: review.prTitle,
+    title,
+    description,
+    openGraph: { title, description, type: "article" },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
@@ -28,18 +31,7 @@ export default async function SharedReviewPage({ params }: Props) {
   const review = await loadReview(slug);
   if (!review) notFound();
 
-  const counts = countBySeverity(review.issues);
-  const pills = SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => {
-    const n = counts.get(s) ?? 0;
-    return {
-      severity: s,
-      label: `${n} ${
-        n === 1
-          ? SEVERITY_STYLES[s].label.toLowerCase()
-          : SEVERITY_STYLES[s].plural
-      }`,
-    };
-  });
+  const pills = severityPills(review.issues);
 
   const n = review.issues.length;
   const prUrl = `https://github.com/${review.owner}/${review.repo}/pull/${review.prNumber}`;

@@ -11,6 +11,10 @@ const EnvSchema = z.object({
     .enum(["1", "0", ""])
     .optional()
     .transform((v) => v === "1"),
+  APP_URL: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().default("http://localhost:3000")
+  ),
   MOCK_REVIEW: z
     .string()
     .optional()

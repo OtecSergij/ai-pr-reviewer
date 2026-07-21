@@ -19,6 +19,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/opengraph-image": ["./app/og/fonts/*.ttf"],
+    "/r/*/opengraph-image": ["./app/og/fonts/*.ttf"],
+  },
   async headers() {
     return [
       {
