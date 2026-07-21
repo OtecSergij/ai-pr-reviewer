@@ -62,7 +62,7 @@ export async function runReview({
   try {
     pr = parsePRUrl(prUrl);
 
-    gh = createGithubAccess(githubPat ?? env.GITHUB_PAT, pr);
+    gh = createGithubAccess(githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT), pr);
 
     const prMetadata = await gh.getPRMetadata();
 
@@ -189,7 +189,7 @@ export async function runReview({
         }
 
         if (!failure) {
-          if (!isPrivate && !signal.aborted) {
+          if (!isPrivate && !signal.aborted && !env.MOCK_REVIEW) {
             let slug: string | null = null;
             try {
               slug = await saveReview({

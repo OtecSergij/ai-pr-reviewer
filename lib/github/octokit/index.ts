@@ -61,11 +61,8 @@ const RETRY_OPTS = {
   },
 };
 
-export function createGithubAccess(token: string, pr: PRRef): GithubAccess {
-  if (!token) {
-    throw new Error("GitHub token is required to create access object");
-  }
-  const client = new Octokit({ auth: token });
+export function createGithubAccess(token: string | null, pr: PRRef): GithubAccess {
+  const client = token ? new Octokit({ auth: token }) : new Octokit();
 
   let metadataPromise: Promise<PRMetadata> | null = null;
   let filesPromise: Promise<Map<string, PRFile>> | null = null;

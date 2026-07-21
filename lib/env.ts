@@ -30,7 +30,24 @@ const EnvSchema = z.object({
   ),
 });
 
-const parsed = EnvSchema.safeParse(process.env);
+const MOCK_PLACEHOLDERS: Record<string, string> = {
+  GITHUB_PAT: "mock",
+  CEREBRAS_API_KEY: "mock",
+  GROQ_API_KEY: "mock",
+  GOOGLE_GENERATIVE_AI_API_KEY: "mock",
+  DATABASE_URL: "postgres://mock:mock@localhost:5432/mock",
+  REDIS_URL: "redis://localhost:6379",
+};
+
+const rawEnv: Record<string, string | undefined> = { ...process.env };
+
+if (rawEnv.MOCK_REVIEW === "1") {
+  for (const [key, placeholder] of Object.entries(MOCK_PLACEHOLDERS)) {
+    if (!rawEnv[key]) rawEnv[key] = placeholder;
+  }
+}
+
+const parsed = EnvSchema.safeParse(rawEnv);
 
 export const env = (parsed.success ? parsed.data : {}) as z.infer<
   typeof EnvSchema
