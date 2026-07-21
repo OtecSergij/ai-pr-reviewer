@@ -1,6 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { ReviewRow } from "@/lib/db/schema";
-import { SEVERITY_STYLES, severityPills } from "@/app/components/review-theme";
+import {
+  SEVERITY_STYLES,
+  severityPills,
+  type SeverityPill,
+} from "@/app/components/review-theme";
 
 const COLOR = {
   ink: "#18181b",
@@ -89,6 +93,10 @@ export function BrandCard() {
 
 export function SeverityCard({ review }: { review: ReviewRow }) {
   const pills = severityPills(review.issues);
+  const shown: SeverityPill[] =
+    pills.length > 0
+      ? pills
+      : [{ severity: "suggestion", label: "No issues found" }];
 
   return (
     <CardFrame
@@ -113,40 +121,23 @@ export function SeverityCard({ review }: { review: ReviewRow }) {
           {`#${review.prNumber}`}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-          {pills.length > 0 ? (
-            pills.map((p) => (
-              <div
-                key={p.severity}
-                style={{
-                  display: "flex",
-                  borderRadius: 9999,
-                  border: `2px solid ${SEVERITY_STYLES[p.severity].border}`,
-                  backgroundColor: SEVERITY_STYLES[p.severity].bg,
-                  color: SEVERITY_STYLES[p.severity].color,
-                  padding: "10px 24px",
-                  fontWeight: 700,
-                  fontSize: 28,
-                }}
-              >
-                {p.label}
-              </div>
-            ))
-          ) : (
+          {shown.map((p) => (
             <div
+              key={p.severity}
               style={{
                 display: "flex",
                 borderRadius: 9999,
-                border: `2px solid ${SEVERITY_STYLES.suggestion.border}`,
-                backgroundColor: SEVERITY_STYLES.suggestion.bg,
-                color: SEVERITY_STYLES.suggestion.color,
+                border: `2px solid ${SEVERITY_STYLES[p.severity].border}`,
+                backgroundColor: SEVERITY_STYLES[p.severity].bg,
+                color: SEVERITY_STYLES[p.severity].color,
                 padding: "10px 24px",
                 fontWeight: 700,
                 fontSize: 28,
               }}
             >
-              No issues found
+              {p.label}
             </div>
-          )}
+          ))}
         </div>
       </div>
 
