@@ -9,6 +9,8 @@ const SERVER_SIDE_MESSAGE =
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
   "Your API key doesn't have access to this model, or its quota is exhausted.";
+const REVIEW_UNAVAILABLE_MESSAGE =
+  "The review service is temporarily unavailable. Please try again later.";
 const MODEL_UNAVAILABLE_MESSAGE = "The selected model isn't available.";
 const TOO_LARGE_MESSAGE = "This PR is too large to review.";
 
@@ -54,13 +56,20 @@ function isAbort(error: unknown): boolean {
   );
 }
 
-function classifyApiError(error: APICallError): FailureVerdict {
+function classifyApiError(
+  error: APICallError,
+  userKey: boolean,
+): FailureVerdict {
   const status = error.statusCode;
 
   if (status === 401)
-    return { hop: false, reason: "auth", message: INVALID_KEY_MESSAGE };
+    return userKey
+      ? { hop: false, reason: "auth", message: INVALID_KEY_MESSAGE }
+      : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 403)
-    return { hop: false, reason: "auth", message: NO_ACCESS_MESSAGE };
+    return userKey
+      ? { hop: false, reason: "auth", message: NO_ACCESS_MESSAGE }
+      : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 404)
     return {
       hop: true,
@@ -81,13 +90,18 @@ function classifyApiError(error: APICallError): FailureVerdict {
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }
 
-export function classifyFailure(error: unknown): FailureVerdict {
+export function classifyFailure(
+  error: unknown,
+  opts?: { userKey?: boolean },
+): FailureVerdict {
   if (isAbort(error))
     return { hop: false, reason: "aborted", message: SERVER_SIDE_MESSAGE };
 
-  if (RetryError.isInstance(error)) return classifyFailure(error.lastError);
+  if (RetryError.isInstance(error))
+    return classifyFailure(error.lastError, opts);
 
-  if (APICallError.isInstance(error)) return classifyApiError(error);
+  if (APICallError.isInstance(error))
+    return classifyApiError(error, opts?.userKey ?? false);
 
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }

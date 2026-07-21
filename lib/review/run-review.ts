@@ -236,7 +236,9 @@ export async function runReview({
           return;
         }
 
-        const knownError = classifyFailure(failure);
+        const knownError = classifyFailure(failure, {
+          userKey: candidates[i].provider === "anthropic",
+        });
 
         if (knownError.reason === "aborted") {
           return;
@@ -276,7 +278,7 @@ export async function runReview({
           "review failed after providers exhausted"
         );
 
-        writer.write({ type: "error", errorText: errorToMessage(failure) });
+        writer.write({ type: "error", errorText: knownError.message });
         return;
       }
     },
