@@ -16,7 +16,7 @@ import {
 import { createReviewTools } from "@/lib/review/tools/review-tools";
 import { SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
-import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
+import { MAX_CHANGED_FILES, MAX_OUTPUT_TOKENS, MAX_STEPS } from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
 import {
@@ -61,7 +61,22 @@ export async function runReview({
 
   try {
     pr = parsePRUrl(prUrl);
+  } catch (e) {
+    const res = errorToResponse(e);
+    if (res) {
+      log.warn({ err: e }, "review rejected before stream");
+      return res;
+    }
+    throw e;
+  }
 
+  const gate = await reviewLimiter.check(ip);
+  if (!gate.allowed) {
+    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
+    return rateLimitResponse(gate);
+  }
+
+  try {
     gh = createGithubAccess(githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT), pr);
 
     const prMetadata = await gh.getPRMetadata();
@@ -113,12 +128,6 @@ export async function runReview({
     return new Response(null, { status: 499 });
   }
 
-  const gate = await reviewLimiter.check(ip);
-  if (!gate.allowed) {
-    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
-    return rateLimitResponse(gate);
-  }
-
   const UIIssues = new Map<string, Issue>();
 
   const messages = [
@@ -165,6 +174,7 @@ export async function runReview({
           messages: streamMessages,
           tools,
           stopWhen: stepCountIs(MAX_STEPS),
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
           abortSignal: signal,
           onError: ({ error }) => {
             failure = error;

@@ -8,9 +8,9 @@ import {
 import { logger } from "@/lib/log";
 
 const requestSchema = z.object({
-  prUrl: z.string().min(1),
-  anthropicKey: z.string().min(1).optional(),
-  githubPat: z.string().min(1).optional(),
+  prUrl: z.string().min(1).max(2048),
+  anthropicKey: z.string().min(1).max(200).optional(),
+  githubPat: z.string().min(1).max(255).optional(),
 });
 
 const REQUEST_ID_PATTERN = /^[\w-]{1,64}$/;
