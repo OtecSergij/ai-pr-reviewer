@@ -237,7 +237,7 @@ export async function runReview({
         }
 
         const knownError = classifyFailure(failure, {
-          userKey: candidates[i].provider === "anthropic",
+          userKey: candidates[i].usesUserKey,
         });
 
         if (knownError.reason === "aborted") {

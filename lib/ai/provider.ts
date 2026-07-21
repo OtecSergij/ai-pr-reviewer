@@ -12,6 +12,7 @@ export type ModelCandidate = {
   model: LanguageModel;
   provider: ProviderName;
   modelId: string;
+  usesUserKey: boolean;
 };
 
 export function selectModels(anthropicKey?: string): ModelCandidate[] {
@@ -25,6 +26,7 @@ export function selectModels(anthropicKey?: string): ModelCandidate[] {
         model: anthropic("claude-sonnet-4-6"),
         provider: "anthropic",
         modelId: "claude-sonnet-4-6",
+        usesUserKey: true,
       },
     ];
   }
@@ -40,16 +42,19 @@ export function selectModels(anthropicKey?: string): ModelCandidate[] {
       model: cerebras("zai-glm-4.7"),
       provider: "cerebras",
       modelId: "zai-glm-4.7",
+      usesUserKey: false,
     },
     {
       model: groq("openai/gpt-oss-120b"),
       provider: "groq",
       modelId: "openai/gpt-oss-120b",
+      usesUserKey: false,
     },
     {
       model: google("gemini-2.5-flash"),
       provider: "google",
       modelId: "gemini-2.5-flash",
+      usesUserKey: false,
     },
   ];
 }
