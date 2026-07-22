@@ -16,7 +16,7 @@ import {
 import { createReviewTools } from "@/lib/review/tools/review-tools";
 import { SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
-import { MAX_CHANGED_FILES, MAX_OUTPUT_TOKENS, MAX_STEPS } from "@/lib/review/config";
+import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
 import {
@@ -164,8 +164,7 @@ export async function runReview({
           system: SYSTEM,
           messages: streamMessages,
           tools,
-          stopWhen: stepCountIs(MAX_STEPS),
-          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          stopWhen: candidates[i].usesUserKey ? () => false : stepCountIs(MAX_STEPS),
           abortSignal: signal,
           onError: ({ error }) => {
             failure = error;

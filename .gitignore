@@ -45,3 +45,4 @@ next-env.d.ts
 # local working notes (not published)
 /docs/to-do.md
 /docs/CODE_REVIEW.md
+/docs/open-findings.md
