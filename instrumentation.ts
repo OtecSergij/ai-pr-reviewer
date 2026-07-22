@@ -1,5 +1,11 @@
 import { type Instrumentation } from "next";
 
+export async function register(): Promise<void> {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { assertEnv } = await import("@/lib/env");
+  assertEnv();
+}
+
 export const onRequestError: Instrumentation.onRequestError = async (
   error,
   request,
