@@ -61,22 +61,7 @@ export async function runReview({
 
   try {
     pr = parsePRUrl(prUrl);
-  } catch (e) {
-    const res = errorToResponse(e);
-    if (res) {
-      log.warn({ err: e }, "review rejected before stream");
-      return res;
-    }
-    throw e;
-  }
 
-  const gate = await reviewLimiter.check(ip);
-  if (!gate.allowed) {
-    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
-    return rateLimitResponse(gate);
-  }
-
-  try {
     gh = createGithubAccess(githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT), pr);
 
     const prMetadata = await gh.getPRMetadata();
@@ -126,6 +111,12 @@ export async function runReview({
 
   if (signal.aborted) {
     return new Response(null, { status: 499 });
+  }
+
+  const gate = await reviewLimiter.check(ip);
+  if (!gate.allowed) {
+    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
+    return rateLimitResponse(gate);
   }
 
   const UIIssues = new Map<string, Issue>();
