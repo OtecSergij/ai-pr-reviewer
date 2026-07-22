@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useReview,
   type ReviewRunOptions,
@@ -40,6 +40,20 @@ export default function Home() {
     reset,
   } = useReview();
   const elapsed = useElapsed(status === "running");
+
+  const workspaceHeadingRef = useRef<HTMLHeadingElement>(null);
+  const errorHeadingRef = useRef<HTMLHeadingElement>(null);
+  const prevStatus = useRef(status);
+
+  useEffect(() => {
+    const prev = prevStatus.current;
+    prevStatus.current = status;
+    if (status === "error") {
+      if (prev !== "error") errorHeadingRef.current?.focus();
+    } else if (status !== "idle" && (prev === "idle" || prev === "error")) {
+      workspaceHeadingRef.current?.focus();
+    }
+  }, [status]);
 
   const onFileClick = useCallback((filename: string) => {
     setSeverityFilter("all");
@@ -87,7 +101,14 @@ export default function Home() {
         tokens={totalTokens}
         onStop={stop}
         onHome={reset}
+        headingRef={workspaceHeadingRef}
       />
+
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {issues.length > 0
+          ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"} found`
+          : ""}
+      </div>
 
       <div className="mx-auto flex w-full max-w-[1240px] items-start px-5">
         <ChangedFilesSidebar
@@ -108,6 +129,7 @@ export default function Home() {
               requestId={requestId}
               onEditUrl={reset}
               onTryAgain={() => start(lastRunOptionsRef.current)}
+              headingRef={errorHeadingRef}
             />
           ) : null}
 

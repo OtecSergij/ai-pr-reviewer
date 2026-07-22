@@ -7,6 +7,7 @@ type ErrorCardProps = {
   requestId?: string | null;
   onEditUrl: () => void;
   onTryAgain: () => void;
+  headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
 const HEADLINES: Record<ErrorKind, string> = {
@@ -43,6 +44,7 @@ export function ErrorCard({
   requestId,
   onEditUrl,
   onTryAgain,
+  headingRef,
 }: ErrorCardProps) {
   return (
     <div className="animate-card-in rounded-xl border border-[#ffd1ce] bg-white p-[18px]">
@@ -50,9 +52,13 @@ export function ErrorCard({
         <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#ffebe9] text-[13px] font-bold text-[#cf222e]">
           !
         </div>
-        <div className="text-[16px] font-bold tracking-[-0.01em]">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-[16px] font-bold tracking-[-0.01em] outline-none"
+        >
           {HEADLINES[kind]}
-        </div>
+        </h2>
       </div>
 
       {message ? (

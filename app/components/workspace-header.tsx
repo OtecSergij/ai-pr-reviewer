@@ -14,6 +14,7 @@ type WorkspaceHeaderProps = {
   tokens: number;
   onStop: () => void;
   onHome: () => void;
+  headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
 function statusBadge(status: WorkspacePhase, elapsed: number) {
@@ -22,28 +23,32 @@ function statusBadge(status: WorkspacePhase, elapsed: number) {
       return {
         bg: TONE.info.bg,
         color: TONE.info.fg,
-        text: `Reviewing ${formatElapsed(elapsed)}`,
+        label: "Reviewing",
+        time: formatElapsed(elapsed),
         spinner: true,
       };
     case "done":
       return {
         bg: TONE.success.bg,
         color: TONE.success.fg,
-        text: `Complete ${formatElapsed(elapsed)}`,
+        label: "Complete",
+        time: formatElapsed(elapsed),
         spinner: false,
       };
     case "aborted":
       return {
         bg: TONE.warning.bg,
         color: TONE.warning.fg,
-        text: `Stopped ${formatElapsed(elapsed)}`,
+        label: "Stopped",
+        time: formatElapsed(elapsed),
         spinner: false,
       };
     case "error":
       return {
         bg: TONE.danger.bg,
         color: TONE.danger.fg,
-        text: "Error",
+        label: "Error",
+        time: "",
         spinner: false,
       };
   }
@@ -56,6 +61,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   tokens,
   onStop,
   onHome,
+  headingRef,
 }: WorkspaceHeaderProps) {
   const badge = statusBadge(status, elapsed);
   const repoLabel = meta ? `${meta.owner}/${meta.repo} #${meta.prNumber}` : "";
@@ -79,14 +85,19 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
 
       <div className="h-[18px] w-px shrink-0 bg-border" />
 
-      <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
-        <div className="shrink-0 whitespace-nowrap font-mono text-[12px] text-muted">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="flex min-w-0 flex-1 items-baseline gap-2.5 outline-none"
+      >
+        <span className="shrink-0 whitespace-nowrap font-mono text-[12px] text-muted">
           {repoLabel}
-        </div>
-        <div className="truncate text-[13px] text-faint">
+        </span>
+        <span className="truncate text-[13px] text-faint">
           {meta?.title ?? ""}
-        </div>
-      </div>
+        </span>
+        {meta ? null : <span className="sr-only">Review workspace</span>}
+      </h1>
 
       {tokens > 0 ? (
         <div
@@ -110,7 +121,12 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
         {badge.spinner ? (
           <Spinner className="h-[11px] w-[11px] border-[#4338ca]/25 border-t-[#4338ca]" />
         ) : null}
-        {badge.text}
+        <span className="sr-only" role="status">
+          {badge.label}
+        </span>
+        <span aria-hidden="true">
+          {badge.time ? `${badge.label} ${badge.time}` : badge.label}
+        </span>
       </div>
 
       {status === "running" ? (

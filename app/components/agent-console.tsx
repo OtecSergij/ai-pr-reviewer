@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import type { TranscriptEntry } from "@/lib/review/transcript";
 import { countSteps } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
@@ -28,6 +28,7 @@ export const AgentConsole = memo(function AgentConsole({
 }: AgentConsoleProps) {
   const trace = mode === "trace";
   const [open, setOpen] = useState(false);
+  const bodyId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
@@ -68,6 +69,8 @@ export const AgentConsole = memo(function AgentConsole({
         </span>
         <button
           onClick={() => setOpen((v) => !v)}
+          aria-expanded={trace ? open : undefined}
+          aria-controls={bodyShown ? bodyId : undefined}
           className="shrink-0 rounded-md border border-border bg-white px-2.5 py-1 text-[11px] font-semibold text-muted hover:border-[#c7c7cd]"
         >
           {open ? "Collapse" : "Expand"}
@@ -76,6 +79,7 @@ export const AgentConsole = memo(function AgentConsole({
 
       {bodyShown ? (
         <div
+          id={bodyId}
           ref={bodyRef}
           onScroll={(e) => {
             const el = e.currentTarget;
