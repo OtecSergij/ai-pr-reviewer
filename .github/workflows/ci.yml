@@ -99,7 +99,7 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           if [ -z "$COOLIFY_DEPLOY_URL" ] || [ -z "$COOLIFY_TOKEN" ]; then
-            echo "Coolify secrets not set - skipping deploy (configure in Coolify, Phase C)"
+            echo "Coolify secrets not set - skipping deploy (set COOLIFY_DEPLOY_URL and COOLIFY_TOKEN repo secrets to enable)"
             exit 0
           fi
           curl --fail-with-body --retry 3 --retry-connrefused --retry-delay 5 \

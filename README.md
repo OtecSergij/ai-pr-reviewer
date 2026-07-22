@@ -6,7 +6,7 @@ An AI agent that reviews GitHub pull requests: it walks the repository, reads th
 
 ## What it does
 
-- Paste a PR URL — the agent fetches the PR, reads the diff and surrounding code via tool calls, and streams issues (error / warning / nit) incrementally as it finds them.
+- Paste a PR URL — the agent fetches the PR, reads the diff and surrounding code via tool calls, and streams issues (error / warning / nit / suggestion) incrementally as it finds them.
 - Every issue links to the exact `file:line` range on GitHub, so you can verify it.
 - Each completed public review gets a shareable link (`/r/<slug>`) that renders the result.
 - Private mode: bring your own GitHub token (`repo` scope) to review a private PR — the token is used in-memory for that single request and never stored. Private reviews aren't persisted and get no share link.
