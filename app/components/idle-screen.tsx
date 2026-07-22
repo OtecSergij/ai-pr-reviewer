@@ -58,8 +58,10 @@ export function IdleScreen({
         >
           <div className="flex gap-2.5">
             <input
+              type="url"
               value={url}
               onChange={(e) => onUrlChange(e.target.value)}
+              required
               placeholder="https://github.com/owner/repo/pull/123"
               aria-label="GitHub pull request URL"
               className={INPUT_CLASS}
@@ -136,6 +138,7 @@ export function IdleScreen({
                 type="password"
                 value={premiumKey}
                 onChange={(e) => setPremiumKey(e.target.value)}
+                required
                 placeholder="Anthropic API key (sk-ant-…)"
                 aria-label="Anthropic API key"
                 className={INPUT_CLASS}

@@ -62,19 +62,23 @@ export const SEVERITY_ORDER: ReadonlyArray<Issue["severity"]> = [
 
 export type SeverityPill = { severity: Issue["severity"]; label: string };
 
+export function severityCountLabel(
+  severity: Issue["severity"],
+  count: number
+): string {
+  return `${count} ${
+    count === 1
+      ? SEVERITY_STYLES[severity].label.toLowerCase()
+      : SEVERITY_STYLES[severity].plural
+  }`;
+}
+
 export function severityPills(issues: Issue[]): SeverityPill[] {
   const counts = countBySeverity(issues);
-  return SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => {
-    const n = counts.get(s) ?? 0;
-    return {
-      severity: s,
-      label: `${n} ${
-        n === 1
-          ? SEVERITY_STYLES[s].label.toLowerCase()
-          : SEVERITY_STYLES[s].plural
-      }`,
-    };
-  });
+  return SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => ({
+    severity: s,
+    label: severityCountLabel(s, counts.get(s) ?? 0),
+  }));
 }
 
 type CodeLineStyle = { bg: string; sign: string; signColor: string };

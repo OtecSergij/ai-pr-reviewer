@@ -13,7 +13,11 @@ export function useElapsed(active: boolean): number {
 
   useEffect(() => {
     if (!active) return;
-    const id = window.setInterval(() => setElapsed((s) => s + 1), 1000);
+    const startedAt = Date.now();
+    const id = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
+      1000
+    );
 
     return () => window.clearInterval(id);
   }, [active]);

@@ -12,6 +12,7 @@ import {
   FILE_STATUS_STYLES,
   SEVERITY_ORDER,
   SEVERITY_STYLES,
+  severityCountLabel,
 } from "./review-theme";
 
 type ChangedFilesSidebarProps = {
@@ -93,7 +94,7 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
 
   return (
     <aside className="sticky top-[54px] max-h-[calc(100vh-54px)] w-[296px] shrink-0 overflow-y-auto border-r border-border-subtle pb-10 pr-[18px] pt-5">
-      {hasError ? (
+      {hasError && files.length === 0 ? (
         <div className="pt-1 text-[12px] text-subtle">
           No pull request loaded.
         </div>
@@ -217,6 +218,8 @@ function FileRow({
             {dotList.map((d) => (
               <div
                 key={d.severity}
+                role="img"
+                aria-label={severityCountLabel(d.severity, d.count)}
                 className="animate-dot-pop flex items-center gap-1"
               >
                 <span
