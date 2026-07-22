@@ -1,3 +1,4 @@
+import "server-only";
 import { Octokit } from "@octokit/rest";
 import type { PRRef } from "../parse-url";
 import { getPRMetadata, type PRMetadata } from "./get-pr-metadata";
@@ -108,6 +109,11 @@ export function createGithubAccess(token: string | null, pr: PRRef): GithubAcces
             }),
           RETRY_OPTS
         );
+        cached.catch(() => {
+          if (fileContentsCache.get(key) === cached) {
+            fileContentsCache.delete(key);
+          }
+        });
         fileContentsCache.set(key, cached);
       }
       return cached;

@@ -81,15 +81,6 @@ export function translateOctokitError(err: unknown, resource: string): never {
   const data = response?.data as { message?: string } | undefined;
   const bodyMessage = data?.message ?? err.message;
 
-  const retryAfter = readHeader(headers, "retry-after");
-  if (retryAfter !== undefined) {
-    const seconds = parseInt(retryAfter, 10);
-    throw new SecondaryRateLimitError(
-      Number.isFinite(seconds) && seconds > 0 ? seconds : 60,
-      { cause: err },
-    );
-  }
-
   if (status === 401) {
     throw new UnauthorizedError({ cause: err });
   }
@@ -101,6 +92,15 @@ export function translateOctokitError(err: unknown, resource: string): never {
   if (status === 403 || status === 429) {
     if (bodyMessage.toLowerCase().includes("secondary rate limit")) {
       throw new SecondaryRateLimitError(60, { cause: err });
+    }
+
+    const retryAfter = readHeader(headers, "retry-after");
+    if (retryAfter !== undefined) {
+      const seconds = parseInt(retryAfter, 10);
+      throw new SecondaryRateLimitError(
+        Number.isFinite(seconds) && seconds > 0 ? seconds : 60,
+        { cause: err },
+      );
     }
 
     const remaining = readHeader(headers, "x-ratelimit-remaining");

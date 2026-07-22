@@ -26,7 +26,8 @@ export function parsePRUrl(input: string): PRRef {
     throw new InvalidPRUrl("not a valid URL", input);
   }
 
-  if (url.hostname !== "github.com") {
+  const hostname = url.hostname.replace(/^www\./, "");
+  if (hostname !== "github.com") {
     throw new InvalidPRUrl(
       `expected host github.com, got ${url.hostname}`,
       input,
@@ -34,7 +35,7 @@ export function parsePRUrl(input: string): PRRef {
   }
 
   const segments = url.pathname.split("/").filter(Boolean);
-  if (segments.length !== 4 || segments[2] !== "pull") {
+  if (segments.length < 4 || segments[2] !== "pull") {
     throw new InvalidPRUrl(
       "expected path /<owner>/<repo>/pull/<number>",
       input,
@@ -44,6 +45,10 @@ export function parsePRUrl(input: string): PRRef {
   const [owner, repo, , numberStr] = segments;
   if (!owner || !repo) {
     throw new InvalidPRUrl("missing owner or repo", input);
+  }
+
+  if (!/^\d+$/.test(numberStr)) {
+    throw new InvalidPRUrl(`invalid PR number: ${numberStr}`, input);
   }
 
   const prNumber = Number(numberStr);

@@ -30,7 +30,7 @@ export function parseUnifiedDiff(patch: string): Hunk[] {
       const result = headRegexp.exec(line);
 
       if (!result) {
-        throw new Error(line);
+        throw new Error(`malformed hunk header: ${JSON.stringify(line)}`);
       }
 
       const oldStart = Number(result[1]);
