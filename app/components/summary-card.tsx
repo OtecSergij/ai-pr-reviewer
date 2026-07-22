@@ -2,8 +2,7 @@
 
 import type { Issue } from "@/lib/review/issue";
 import type { PRMeta } from "@/lib/review/stream";
-import { SEVERITY_ORDER, SEVERITY_STYLES } from "./review-theme";
-import { countBySeverity } from "@/lib/review/issue-stats";
+import { SEVERITY_STYLES, severityPills } from "./review-theme";
 import { formatElapsed } from "./format";
 import { CopyButton } from "./copy-button";
 
@@ -26,18 +25,7 @@ export function SummaryCard({
   isPrivate,
   shareSlug,
 }: SummaryCardProps) {
-  const counts = countBySeverity(issues);
-  const pills = SEVERITY_ORDER.filter((s) => counts.get(s)).map((s) => {
-    const n = counts.get(s) ?? 0;
-    return {
-      severity: s,
-      label: `${n} ${
-        n === 1
-          ? SEVERITY_STYLES[s].label.toLowerCase()
-          : SEVERITY_STYLES[s].plural
-      }`,
-    };
-  });
+  const pills = severityPills(issues);
 
   const n = issues.length;
   const repo = meta
