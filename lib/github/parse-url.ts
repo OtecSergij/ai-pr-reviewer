@@ -43,16 +43,13 @@ export function parsePRUrl(input: string): PRRef {
   }
 
   const [owner, repo, , numberStr] = segments;
-  if (!owner || !repo) {
-    throw new InvalidPRUrl("missing owner or repo", input);
-  }
 
   if (!/^\d+$/.test(numberStr)) {
     throw new InvalidPRUrl(`invalid PR number: ${numberStr}`, input);
   }
 
   const prNumber = Number(numberStr);
-  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+  if (!Number.isSafeInteger(prNumber) || prNumber <= 0) {
     throw new InvalidPRUrl(`invalid PR number: ${numberStr}`, input);
   }
 
