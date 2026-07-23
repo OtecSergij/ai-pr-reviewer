@@ -29,6 +29,7 @@ jobs:
       - run: npx next typegen
       - run: npm run lint
       - run: npx tsc --noEmit
+      - run: npm test
       - name: Assert startup preload is wired into the entrypoint
         run: grep -q 'validate-startup.mjs' Dockerfile
 
