@@ -9,6 +9,11 @@ const id: ReviewIdentity = {
 };
 
 describe("reviewSlug", () => {
+  it("pins the exact slug for known identities (guards against algorithm drift)", () => {
+    expect(reviewSlug(id)).toBe("0T6rLUpSmg3");
+    expect(reviewSlug({ ...id, prNumber: 124 })).toBe("936LEENkrhc");
+  });
+
   it("is deterministic for the same identity", () => {
     expect(reviewSlug(id)).toBe(reviewSlug(id));
   });
