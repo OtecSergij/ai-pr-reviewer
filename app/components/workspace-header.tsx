@@ -11,13 +11,28 @@ type WorkspaceHeaderProps = {
   meta: PRMeta | null;
   status: WorkspacePhase;
   elapsed: number;
+  truncated: boolean;
   tokens: number;
   onStop: () => void;
   onHome: () => void;
   headingRef?: React.Ref<HTMLHeadingElement>;
 };
 
-function statusBadge(status: WorkspacePhase, elapsed: number) {
+function statusBadge(
+  status: WorkspacePhase,
+  elapsed: number,
+  truncated: boolean
+) {
+  if (status === "done" && truncated) {
+    return {
+      bg: TONE.warning.bg,
+      color: TONE.warning.fg,
+      label: "Cut short",
+      time: formatElapsed(elapsed),
+      spinner: false,
+    };
+  }
+
   switch (status) {
     case "running":
       return {
@@ -58,12 +73,13 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   meta,
   status,
   elapsed,
+  truncated,
   tokens,
   onStop,
   onHome,
   headingRef,
 }: WorkspaceHeaderProps) {
-  const badge = statusBadge(status, elapsed);
+  const badge = statusBadge(status, elapsed, truncated);
   const repoLabel = meta ? `${meta.owner}/${meta.repo} #${meta.prNumber}` : "";
 
   return (
@@ -101,7 +117,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
 
       {tokens > 0 ? (
         <div
-          className="shrink-0 whitespace-nowrap font-mono text-[11px] text-faint"
+          className="hidden shrink-0 whitespace-nowrap font-mono text-[11px] text-faint sm:block"
           title="Total tokens used"
         >
           {tokens.toLocaleString()} tokens
@@ -109,7 +125,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
       ) : null}
 
       {meta ? (
-        <div className="shrink-0 rounded-full border border-border bg-white px-2.5 py-1 font-mono text-[11px] text-muted">
+        <div className="hidden shrink-0 rounded-full border border-border bg-white px-2.5 py-1 font-mono text-[11px] text-muted sm:block">
           {meta.model}
         </div>
       ) : null}

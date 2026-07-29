@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AppHeader } from "@/app/components/app-header";
 
 export default function SharedReviewError({
   error,
@@ -12,14 +13,7 @@ export default function SharedReviewError({
   return (
     <div className="flex min-h-screen justify-center px-5 pb-[60px] pt-[50px]">
       <div className="w-full max-w-[820px]">
-        <Link href="/" className="flex w-fit items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink font-mono text-[12px] font-semibold text-white">
-            PR
-          </div>
-          <div className="text-[18px] font-bold tracking-[-0.02em] text-ink">
-            AI PR Reviewer
-          </div>
-        </Link>
+        <AppHeader />
 
         <div className="animate-card-in mt-6 rounded-xl border border-[#ffd1ce] bg-white p-[18px]">
           <div className="flex items-center gap-2.5">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { InferUIMessageChunk } from "ai";
+import type { FinishReason, InferUIMessageChunk } from "ai";
 import type { Issue } from "@/lib/review/issue";
 import type {
   PRFileSummary,
@@ -12,8 +12,13 @@ import type {
   ErrorKind,
   ReviewStatus,
   TranscriptEntry,
+  TranscriptTextKind,
 } from "@/lib/review/transcript";
-import { isErrorKind } from "@/lib/review/transcript";
+import {
+  isDegenerateText,
+  isErrorKind,
+  isTextEntry,
+} from "@/lib/review/transcript";
 
 type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
 
@@ -27,6 +32,19 @@ function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
     (e): e is Extract<TranscriptEntry, { kind: "tool" }> =>
       e.kind === "tool" && e.toolCallId === toolCallId
   );
+}
+
+function appendDelta(
+  entries: TranscriptEntry[],
+  kind: TranscriptTextKind,
+  delta: string
+): void {
+  const last = entries[entries.length - 1];
+  if (last && isTextEntry(last) && last.kind === kind) {
+    entries[entries.length - 1] = { kind, text: last.text + delta };
+  } else {
+    entries.push({ kind, text: delta });
+  }
 }
 
 function errorKindFromResponse(res: Response): ErrorKind {
@@ -44,6 +62,7 @@ export function useReview() {
   const [toolEntries, setToolEntries] = useState<TranscriptEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
+  const [finishReason, setFinishReason] = useState<FinishReason | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
   const [files, setFiles] = useState<PRFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
@@ -77,6 +96,7 @@ export function useReview() {
     setIssues([]);
     setError(null);
     setErrorKind(null);
+    setFinishReason(null);
     setMeta(null);
     setFiles([]);
     setTotalTokens(0);
@@ -120,6 +140,7 @@ export function useReview() {
         const decoder = new TextDecoder();
         let buffer = "";
         let streamError: string | null = null;
+        const openBlocks = new Map<string, number>();
 
         while (true) {
           const { value, done } = await reader.read();
@@ -199,6 +220,7 @@ export function useReview() {
 
               case "data-meta":
                 setMeta(chunk.data);
+                setFinishReason(null);
                 break;
 
               case "data-files":
@@ -220,44 +242,73 @@ export function useReview() {
 
               case "text-start":
                 entries.push({ kind: "text", text: "" });
+                openBlocks.set(`text:${chunk.id}`, entries.length - 1);
                 scheduleCommit();
                 break;
 
               case "text-delta": {
-                const last = entries[entries.length - 1];
-                if (last && last.kind === "text") {
-                  entries[entries.length - 1] = {
+                const idx = openBlocks.get(`text:${chunk.id}`);
+                const open = idx === undefined ? undefined : entries[idx];
+                if (idx !== undefined && open?.kind === "text") {
+                  entries[idx] = {
                     kind: "text",
-                    text: last.text + chunk.delta,
+                    text: open.text + chunk.delta,
                   };
                 } else {
-                  entries.push({ kind: "text", text: chunk.delta });
+                  appendDelta(entries, "text", chunk.delta);
                 }
                 scheduleCommit();
                 break;
               }
 
               case "reasoning-start":
-                entries.push({ kind: "text", text: "" });
+                entries.push({ kind: "reasoning", text: "" });
+                openBlocks.set(`reasoning:${chunk.id}`, entries.length - 1);
                 scheduleCommit();
                 break;
 
               case "reasoning-delta": {
-                const lastReasoning = entries[entries.length - 1];
-                if (lastReasoning && lastReasoning.kind === "text") {
-                  entries[entries.length - 1] = {
-                    kind: "text",
-                    text: lastReasoning.text + chunk.delta,
+                const idx = openBlocks.get(`reasoning:${chunk.id}`);
+                const open = idx === undefined ? undefined : entries[idx];
+                if (idx !== undefined && open?.kind === "reasoning") {
+                  entries[idx] = {
+                    kind: "reasoning",
+                    text: open.text + chunk.delta,
                   };
                 } else {
-                  entries.push({ kind: "text", text: chunk.delta });
+                  appendDelta(entries, "reasoning", chunk.delta);
                 }
                 scheduleCommit();
                 break;
               }
 
+              case "text-end":
+              case "reasoning-end": {
+                const kind: TranscriptTextKind =
+                  chunk.type === "text-end" ? "text" : "reasoning";
+                const key = `${kind}:${chunk.id}`;
+                const idx = openBlocks.get(key);
+                openBlocks.delete(key);
+                if (idx === undefined) break;
+                const open = entries[idx];
+                if (
+                  open &&
+                  isTextEntry(open) &&
+                  open.kind === kind &&
+                  isDegenerateText(open.text)
+                ) {
+                  entries[idx] = { kind, text: "" };
+                  scheduleCommit();
+                }
+                break;
+              }
+
               case "error":
                 streamError = chunk.errorText;
+                break;
+
+              case "finish":
+                setFinishReason(chunk.finishReason ?? null);
                 break;
 
               default:
@@ -318,6 +369,7 @@ export function useReview() {
     toolEntries,
     error,
     errorKind,
+    finishReason,
     meta,
     files,
     totalTokens,
