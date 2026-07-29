@@ -1,5 +1,6 @@
 import "server-only";
 import { eq, sql } from "drizzle-orm";
+import type { Logger } from "pino";
 import { db } from "@/lib/db/client";
 import { reviews, type ReviewRow } from "@/lib/db/schema";
 import type { Issue } from "@/lib/review/issue";
@@ -15,8 +16,10 @@ export async function saveReview(
     prTitle: string;
     issues: Issue[];
     provider: string;
-  }
+  },
+  log: Logger
 ): Promise<string> {
+  const startedAt = Date.now();
   const slug = reviewSlug(input);
   await Promise.race([
     db
@@ -42,6 +45,16 @@ export async function saveReview(
       }),
     timeoutAfter(SAVE_TIMEOUT_MS),
   ]);
+
+  log.info(
+    {
+      slug,
+      issues: input.issues.length,
+      durationMs: Date.now() - startedAt,
+    },
+    "review saved"
+  );
+
   return slug;
 }
 
