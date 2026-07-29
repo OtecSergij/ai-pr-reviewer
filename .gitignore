@@ -42,10 +42,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local working notes (not published)
-/docs/to-do.md
-/docs/CODE_REVIEW.md
-/docs/open-findings.md
-/docs/TEST_PLAN.md
-/docs/TEST_REPORT.md
+# local tooling (not published)
 /.claude/
