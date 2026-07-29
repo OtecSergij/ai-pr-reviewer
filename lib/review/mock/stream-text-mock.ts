@@ -4,42 +4,36 @@ import type {
   ToolCallOptions,
   ToolExecuteFunction,
 } from "ai";
-import { APICallError, RetryError, LoadAPIKeyError } from "ai";
 import { env } from "@/lib/env";
 
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { ReviewToolName } from "@/lib/review/tools/tool-names";
 import { modelIssueSchema } from "@/lib/review/model-issue.schema";
-import type { ModelIssue } from "@/lib/review/model-issue.schema";
 import type { ReviewUIMessage } from "@/lib/review/stream";
 import { errorToMessage } from "@/lib/review/errors";
-
-export const MOCK_PR_URL = "https://github.com/vercel/ms/pull/35";
+import {
+  injectedStartError,
+  injectedStreamError,
+  streamErrorStopIndex,
+} from "@/lib/review/mock/injected-error";
+import {
+  createMockIdScope,
+  isIssueStep,
+  selectScenario,
+} from "@/lib/review/mock/scenario";
+import type {
+  MockIdScope,
+  MockScenario,
+  MockTextBlock,
+  MockToolStep,
+} from "@/lib/review/mock/scenario";
+import { createToolStepResult } from "@/lib/review/mock/step-result";
+import { logger } from "@/lib/log";
 
 const TEXT_DELTA_PAUSE_MS = 150;
 const EVENT_PAUSE_MS = 250;
 const TOOL_PAUSE_MS = 500;
-
-export const mockModelIssues: ModelIssue[] = [
-  {
-    file: "index.js",
-    line_start: 74,
-    line_end: 77,
-    severity: "warning",
-    title: "Unit aliases are duplicated between the regex and the switch",
-    body: "Every alias now has to be listed twice: once in the `parse` regex and once in this `switch`. Nothing checks that the two lists stay in sync, so they will drift:\n\n- an alias matched by the regex but missing here makes `parse` return `undefined` silently;\n- a `case` without a regex counterpart is dead code.\n\nA single lookup table would keep one source of truth.",
-    suggestion:
-      "```js\nvar factors = {\n  ms: 1, msec: 1, msecs: 1, millisecond: 1, milliseconds: 1,\n  s: s, sec: s, secs: s, second: s, seconds: s,\n  // … same for the other units\n};\nreturn n * factors[type];\n```",
-  },
-  {
-    file: "test/test.js",
-    line_start: 61,
-    line_end: 61,
-    severity: "nit",
-    title: 'describe label says "long string" but the block mostly tests abbreviations',
-    body: "`'17 msecs'`, `'1 sec'`, `'1 min'`, `'1 hr'` are abbreviations, not long units. A failing test in this block would point at the wrong place — consider renaming or splitting it.",
-  },
-];
+const FIRST_TOOL_STEP = 0;
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
@@ -62,183 +56,122 @@ async function* mockUIStream(
   }
 }
 
-function injectedError(): unknown {
-  const apiUrl = "https://mock.provider/v1/messages";
-
-  switch (env.MOCK_ERROR) {
-    case "api-retryable":
-      return new APICallError({
-        message: "Service Unavailable",
-        url: apiUrl,
-        requestBodyValues: {},
-        statusCode: 503,
-        isRetryable: true,
-      });
-    case "retry-exhausted":
-      return new RetryError({
-        message: "Failed after maximum retries",
-        reason: "maxRetriesExceeded",
-        errors: [
-          new APICallError({
-            message: "Service Unavailable",
-            url: apiUrl,
-            requestBodyValues: {},
-            statusCode: 503,
-            isRetryable: true,
-          }),
-        ],
-      });
-    case "api-400":
-      return new APICallError({
-        message: "Bad Request",
-        url: apiUrl,
-        requestBodyValues: {},
-        statusCode: 400,
-        isRetryable: false,
-      });
-    case "load-key":
-      return new LoadAPIKeyError({ message: "API key is missing" });
-    case "unknown":
-      return new Error("Something unexpected blew up");
-    default:
-      return undefined;
-  }
-}
-
 async function* reviewScenario(
   options: StreamTextOptions
 ): AsyncGenerator<MockChunk> {
-  const { tools, abortSignal: signal } = options;
+  const signal = options.abortSignal;
+  const scopeId = createMockIdScope();
 
-  const injected = injectedError();
+  const injected = injectedStartError();
   if (injected) throw injected;
 
   if (env.MOCK_ERROR === "tool-outcomes") {
-    yield* toolOutcomesDemo(tools, signal);
+    if (env.MOCK_SCENARIO) {
+      logger.warn(
+        { mockError: env.MOCK_ERROR, mockScenario: env.MOCK_SCENARIO },
+        "MOCK_SCENARIO ignored: MOCK_ERROR=tool-outcomes streams its own fixture"
+      );
+    }
+    yield* toolOutcomesDemo(options, scopeId);
     return;
   }
 
-  for (const issue of mockModelIssues) modelIssueSchema.parse(issue);
+  const scenario = selectScenario(env.MOCK_SCENARIO);
+  assertScenarioIssues(scenario);
+
+  const stopIndex = streamErrorStopIndex(scenario.steps, options.messages);
+  let toolStepNumber = 0;
 
   yield { type: "start" };
 
-  yield* textBlock(
-    "mock-text-1",
-    [
-      "Taking a look at this PR. ",
-      "First the metadata — ",
-      "title, description, scope — ",
-      "then the changed files.",
-    ],
-    signal
-  );
-  if (signal?.aborted) return;
+  for (const [index, step] of scenario.steps.entries()) {
+    switch (step.kind) {
+      case "text":
+        yield* textBlock(scopedBlock(step, scopeId), signal);
+        break;
+      case "reasoning":
+        yield* reasoningBlock(scopedBlock(step, scopeId), signal);
+        break;
+      case "interleaved-text":
+        yield* interleavedTextBlocks(
+          scopedBlock(step.first, scopeId),
+          scopedBlock(step.second, scopeId),
+          signal
+        );
+        break;
+      case "tool":
+        yield* toolStep(options, step, toolStepNumber, scopeId, signal);
+        toolStepNumber++;
+        break;
+    }
 
-  yield* toolStep(tools, REVIEW_TOOL_NAMES.getPrMetadata, {}, "mock-call-1", signal);
-  if (signal?.aborted) return;
+    if (signal?.aborted) return;
 
-  yield* toolStep(tools, REVIEW_TOOL_NAMES.getPrFilesSummary, {}, "mock-call-2", signal);
-  if (signal?.aborted) return;
+    if (index === stopIndex) throw injectedStreamError();
+  }
 
-  yield* textBlock(
-    "mock-text-2",
-    [
-      "Three files changed: ",
-      "`index.js`, `test/test.js` and `README.md`. ",
-      "The parser change in `index.js` is the core of the PR — ",
-      "reading its diff first.",
-    ],
-    signal
-  );
-  if (signal?.aborted) return;
+  yield { type: "finish", finishReason: scenario.finishReason };
+}
 
-  yield* toolStep(
-    tools,
-    REVIEW_TOOL_NAMES.getDiff,
-    { filename: "index.js" },
-    "mock-call-3",
-    signal
-  );
-  if (signal?.aborted) return;
+function scopedBlock(block: MockTextBlock, scopeId: MockIdScope): MockTextBlock {
+  return { id: scopeId(block.id), deltas: block.deltas };
+}
 
-  yield* toolStep(
-    tools,
-    REVIEW_TOOL_NAMES.emitIssue,
-    mockModelIssues[0],
-    "mock-call-4",
-    signal
-  );
-  if (signal?.aborted) return;
+function assertScenarioIssues(scenario: MockScenario): void {
+  for (const step of scenario.steps) {
+    if (!isIssueStep(step)) continue;
 
-  yield* textBlock(
-    "mock-text-3",
-    [
-      "The unit table in `parse` is worth flagging. ",
-      "Now checking the new tests ",
-      "in `test/test.js`.",
-    ],
-    signal
-  );
-  if (signal?.aborted) return;
+    const parsed = modelIssueSchema.safeParse(step.input);
+    if (parsed.success) continue;
 
-  yield* toolStep(
-    tools,
-    REVIEW_TOOL_NAMES.getDiff,
-    { filename: "test/test.js" },
-    "mock-call-5",
-    signal
-  );
-  if (signal?.aborted) return;
+    const problems = parsed.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
 
-  yield* toolStep(
-    tools,
-    REVIEW_TOOL_NAMES.emitIssue,
-    mockModelIssues[1],
-    "mock-call-6",
-    signal
-  );
-  if (signal?.aborted) return;
-
-  yield* textBlock(
-    "mock-text-4",
-    [
-      "**Review finished.** ",
-      "I reported 2 issues: a `warning` about the duplicated unit list in `index.js` ",
-      "and a `nit` about a misleading test label. ",
-      "Overall the change looks solid — every new alias is covered by tests.",
-    ],
-    signal
-  );
-  if (signal?.aborted) return;
-
-  yield { type: "finish", finishReason: "stop" };
+    throw new Error(
+      `streamTextMock: fixture issue "${step.toolCallId}" no longer satisfies modelIssueSchema — ${problems}`
+    );
+  }
 }
 
 async function* toolOutcomesDemo(
-  tools: StreamTextOptions["tools"],
-  signal?: AbortSignal
+  options: StreamTextOptions,
+  scopeId: MockIdScope
 ): AsyncGenerator<MockChunk> {
+  const signal = options.abortSignal;
+  const failedCallId = scopeId("demo-fail");
+
   yield { type: "start" };
 
   yield* textBlock(
-    "demo-text",
-    ["Demonstrating tool outcomes: ", "one skipped, one failed."],
+    scopedBlock(
+      {
+        id: "demo-text",
+        deltas: ["Demonstrating tool outcomes: ", "one skipped, one failed."],
+      },
+      scopeId
+    ),
     signal
   );
   if (signal?.aborted) return;
 
   yield* toolStep(
-    tools,
-    REVIEW_TOOL_NAMES.getFileContents,
-    { path: "does/not/exist.ts" },
-    "demo-skip",
+    options,
+    {
+      kind: "tool",
+      toolCallId: "demo-skip",
+      toolName: REVIEW_TOOL_NAMES.getFileContents,
+      input: { path: "does/not/exist.ts" },
+    },
+    FIRST_TOOL_STEP,
+    scopeId,
     signal
   );
   if (signal?.aborted) return;
 
   yield {
     type: "tool-input-available",
-    toolCallId: "demo-fail",
+    toolCallId: failedCallId,
     toolName: REVIEW_TOOL_NAMES.getDiff,
     input: { filename: "index.js" },
   };
@@ -246,7 +179,7 @@ async function* toolOutcomesDemo(
   if (signal?.aborted) return;
   yield {
     type: "tool-output-error",
-    toolCallId: "demo-fail",
+    toolCallId: failedCallId,
     errorText: "Simulated tool failure",
   };
 
@@ -254,42 +187,110 @@ async function* toolOutcomesDemo(
 }
 
 async function* textBlock(
-  id: string,
-  deltas: string[],
+  block: MockTextBlock,
   signal?: AbortSignal
 ): AsyncGenerator<MockChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
 
-  yield { type: "text-start", id };
+  yield { type: "text-start", id: block.id };
 
-  for (const delta of deltas) {
+  for (const delta of block.deltas) {
     await sleep(TEXT_DELTA_PAUSE_MS, signal);
     if (signal?.aborted) return;
-    yield { type: "text-delta", id, delta };
+    yield { type: "text-delta", id: block.id, delta };
   }
 
-  yield { type: "text-end", id };
+  yield { type: "text-end", id: block.id };
+}
+
+async function* reasoningBlock(
+  block: MockTextBlock,
+  signal?: AbortSignal
+): AsyncGenerator<MockChunk> {
+  if (signal?.aborted) return;
+  await sleep(EVENT_PAUSE_MS, signal);
+  if (signal?.aborted) return;
+
+  yield { type: "reasoning-start", id: block.id };
+
+  for (const delta of block.deltas) {
+    await sleep(TEXT_DELTA_PAUSE_MS, signal);
+    if (signal?.aborted) return;
+    yield { type: "reasoning-delta", id: block.id, delta };
+  }
+
+  yield { type: "reasoning-end", id: block.id };
+}
+
+async function* interleavedTextBlocks(
+  first: MockTextBlock,
+  second: MockTextBlock,
+  signal?: AbortSignal
+): AsyncGenerator<MockChunk> {
+  if (signal?.aborted) return;
+  await sleep(EVENT_PAUSE_MS, signal);
+  if (signal?.aborted) return;
+
+  yield { type: "text-start", id: first.id };
+  yield { type: "text-start", id: second.id };
+
+  const rounds = Math.max(first.deltas.length, second.deltas.length);
+
+  for (let round = 0; round < rounds; round++) {
+    for (const block of [first, second]) {
+      const delta = block.deltas[round];
+      if (delta === undefined) continue;
+
+      await sleep(TEXT_DELTA_PAUSE_MS, signal);
+      if (signal?.aborted) return;
+      yield { type: "text-delta", id: block.id, delta };
+    }
+  }
+
+  yield { type: "text-end", id: first.id };
+  yield { type: "text-end", id: second.id };
 }
 
 async function* toolStep(
-  tools: StreamTextOptions["tools"],
-  toolName: ReviewToolName,
-  input: unknown,
-  toolCallId: string,
+  options: StreamTextOptions,
+  step: MockToolStep,
+  stepNumber: number,
+  scopeId: MockIdScope,
   signal?: AbortSignal
 ): AsyncGenerator<MockChunk> {
+  const { toolName, input } = step;
+  const toolCallId = scopeId(step.toolCallId);
+
   if (signal?.aborted) return;
   await sleep(TOOL_PAUSE_MS, signal);
   if (signal?.aborted) return;
 
   yield { type: "tool-input-available", toolCallId, toolName, input };
 
-  const output = await callTool(tools, toolName, input, toolCallId, signal);
+  const output = await callTool(
+    options.tools,
+    toolName,
+    input,
+    toolCallId,
+    signal
+  );
   if (signal?.aborted) return;
 
   yield { type: "tool-output-available", toolCallId, output };
+
+  await options.onStepFinish?.(
+    createToolStepResult({
+      model: options.model,
+      stepNumber,
+      toolName,
+      toolCallId,
+      input,
+      output,
+      scopeId,
+    })
+  );
 }
 
 async function callTool(

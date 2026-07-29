@@ -6,3 +6,5 @@ dist
 npm-debug.log*
 .DS_Store
 tsconfig.tsbuildinfo
+docs
+.claude

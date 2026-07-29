@@ -46,3 +46,6 @@ next-env.d.ts
 /docs/to-do.md
 /docs/CODE_REVIEW.md
 /docs/open-findings.md
+/docs/TEST_PLAN.md
+/docs/TEST_REPORT.md
+/.claude/
