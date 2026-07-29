@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReviewRunOptions } from "@/app/hooks/review/use-review";
+import { MAX_CHANGED_FILES } from "@/lib/review/config";
 
 type IdleScreenProps = {
   url: string;
@@ -149,6 +150,10 @@ export function IdleScreen({
             </div>
           ) : null}
         </form>
+
+        <p className="mt-3 text-[11.5px] text-faint">
+          Reviews pull requests with up to {MAX_CHANGED_FILES} changed files.
+        </p>
       </div>
     </div>
   );
