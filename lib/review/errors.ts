@@ -106,6 +106,40 @@ export function classifyFailure(
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }
 
+export const CUT_SHORT_VERDICT: FailureVerdict = {
+  hop: true,
+  reason: "too-large",
+  message: TOO_LARGE_MESSAGE,
+};
+
+const REASON_PRIORITY: Record<FailureReason, number> = {
+  "too-large": 0,
+  auth: 1,
+  unavailable: 2,
+  "rate-limit": 3,
+  overloaded: 4,
+  server: 5,
+  unknown: 6,
+  aborted: 7,
+};
+
+export function pickVerdict(
+  verdicts: readonly FailureVerdict[],
+): FailureVerdict {
+  let best: FailureVerdict | null = null;
+
+  for (const verdict of verdicts) {
+    if (
+      best === null ||
+      REASON_PRIORITY[verdict.reason] < REASON_PRIORITY[best.reason]
+    ) {
+      best = verdict;
+    }
+  }
+
+  return best ?? { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
+}
+
 export function errorToMessage(error: unknown): string {
   if (error instanceof GitHubError) return error.message;
   return classifyFailure(error).message;

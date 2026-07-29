@@ -15,6 +15,48 @@ function normalizeModelText(s: string): string {
     .replace(/\\t/g, "  ");
 }
 
+const FENCE_CHARS = ["`", "~"];
+
+type Fence = { char: string; length: number };
+
+function openingFence(line: string): Fence | null {
+  const char = FENCE_CHARS.find((c) => line.startsWith(c.repeat(3)));
+  if (!char) return null;
+
+  let length = 0;
+  while (line[length] === char) length += 1;
+
+  const info = line.slice(length);
+  return info.includes(char) ? null : { char, length };
+}
+
+function isClosingFence(line: string, fence: Fence): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.length >= fence.length &&
+    [...trimmed].every((char) => char === fence.char)
+  );
+}
+
+function unwrapCodeFence(text: string): string {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return text;
+
+  const fence = openingFence(lines[0]);
+  if (!fence) return text;
+
+  const closingIdx = lines.findIndex(
+    (line, i) => i > 0 && isClosingFence(line, fence)
+  );
+  if (closingIdx !== lines.length - 1) return text;
+
+  return lines.slice(1, -1).join("\n");
+}
+
+export function normalizeSuggestion(s: string): string {
+  return unwrapCodeFence(normalizeModelText(s));
+}
+
 function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
   const inRange = (n: number | null): boolean =>
     n !== null && n >= issue.line_start && n <= issue.line_end;
@@ -48,18 +90,36 @@ function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
   }));
 }
 
+type CodeLinesResult = {
+  codeLines: CodeLine[];
+  patchFound: boolean;
+  hunkMatched: boolean;
+};
+
+const noCodeLines = (): CodeLinesResult => ({
+  codeLines: [],
+  patchFound: false,
+  hunkMatched: false,
+});
+
 async function buildCodeLines(
   gh: GithubAccess,
   issue: ModelIssue,
   log: Logger
-): Promise<CodeLine[]> {
+): Promise<CodeLinesResult> {
   try {
     const patch = await gh.getDiff(issue.file);
-    if (!patch) return [];
-    return sliceFromDiff(patch, issue) ?? [];
+    if (!patch) return noCodeLines();
+
+    const slice = sliceFromDiff(patch, issue);
+    return {
+      codeLines: slice ?? [],
+      patchFound: true,
+      hunkMatched: slice !== null,
+    };
   } catch (e) {
     log.warn({ err: e, file: issue.file }, "buildCodeLines failed");
-    return [];
+    return noCodeLines();
   }
 }
 
@@ -69,7 +129,11 @@ export async function enrichIssue(
   issue: ModelIssue,
   log: Logger
 ): Promise<Issue> {
-  const codeLines = await buildCodeLines(gh, issue, log);
+  const { codeLines, patchFound, hunkMatched } = await buildCodeLines(
+    gh,
+    issue,
+    log
+  );
 
   const id = createHash("sha256")
     .update(
@@ -77,13 +141,27 @@ export async function enrichIssue(
     )
     .digest("hex");
 
+  log.info(
+    {
+      id,
+      file: issue.file,
+      lineStart: issue.line_start,
+      lineEnd: issue.line_end,
+      severity: issue.severity,
+      patchFound,
+      hunkMatched,
+      codeLines: codeLines.length,
+    },
+    "issue enriched"
+  );
+
   return {
     id,
     severity: issue.severity,
     title: issue.title,
     body: normalizeModelText(issue.body),
     suggestion: issue.suggestion
-      ? normalizeModelText(issue.suggestion)
+      ? normalizeSuggestion(issue.suggestion)
       : undefined,
     file: issue.file,
     lineStart: issue.line_start,

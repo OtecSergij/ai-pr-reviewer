@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const MAX_ISSUE_TITLE = 120;
+export const MAX_ISSUE_BODY = 2000;
+
 export const modelIssueSchema = z
   .object({
     file: z
@@ -30,12 +33,14 @@ export const modelIssueSchema = z
     title: z
       .string()
       .min(1)
-      .max(120)
-      .describe("One-line summary of the problem (max 120 characters)"),
+      .max(MAX_ISSUE_TITLE)
+      .describe(
+        `One-line summary of the problem (max ${MAX_ISSUE_TITLE} characters)`
+      ),
     body: z
       .string()
       .min(1)
-      .max(2000)
+      .max(MAX_ISSUE_BODY)
       .describe(
         "Markdown explanation: what is wrong and why it matters. Be specific and concise."
       ),

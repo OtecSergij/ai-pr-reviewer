@@ -33,6 +33,15 @@ export async function POST(req: Request) {
     return res;
   }
 
+  const contentType = req.headers.get("content-type");
+  if (!contentType?.toLowerCase().includes("application/json")) {
+    log.warn({ contentType }, "rejected: unsupported content type");
+    return new Response("Unsupported content type: send application/json.", {
+      status: 415,
+      headers: { "x-request-id": requestId },
+    });
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
 
@@ -43,6 +52,16 @@ export async function POST(req: Request) {
       { status: 400, headers: { "x-request-id": requestId } }
     );
   }
+
+  log.info(
+    {
+      ip,
+      prUrl: parsed.data.prUrl,
+      hasByoKey: Boolean(parsed.data.anthropicKey),
+      hasGithubPat: Boolean(parsed.data.githubPat),
+    },
+    "review requested"
+  );
 
   const res = await runReview({
     prUrl: parsed.data.prUrl,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { APICallError, RetryError } from "ai";
-import { classifyFailure } from "./errors";
+import { classifyFailure, pickVerdict } from "./errors";
 
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
@@ -180,5 +180,32 @@ describe("classifyFailure non-API errors", () => {
       hop: true,
       reason: "unknown",
     });
+  });
+});
+
+describe("pickVerdict", () => {
+  it("prefers the most informative verdict over the last one seen", () => {
+    expect(
+      pickVerdict([
+        classifyFailure(apiError({ statusCode: 413 })),
+        classifyFailure(apiError({ statusCode: 429 })),
+        classifyFailure(new Error("boom")),
+      ]),
+    ).toEqual({ hop: true, reason: "too-large", message: TOO_LARGE_MESSAGE });
+  });
+
+  it("never prefers an aborted verdict over a real failure", () => {
+    const aborted = new Error("stopped");
+    aborted.name = "AbortError";
+    expect(
+      pickVerdict([
+        classifyFailure(aborted),
+        classifyFailure(apiError({ statusCode: 429 })),
+      ]),
+    ).toMatchObject({ reason: "rate-limit" });
+  });
+
+  it("falls back to a generic verdict for an empty list", () => {
+    expect(pickVerdict([])).toMatchObject({ hop: true, reason: "unknown" });
   });
 });
