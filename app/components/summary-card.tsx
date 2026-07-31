@@ -132,9 +132,7 @@ export function SummaryCard({
         </div>
       ) : null}
 
-      <div className="mt-3 font-mono text-[11px] text-faint">
-        {doneMeta}
-      </div>
+      <div className="mt-3 font-mono text-[11px] text-faint">{doneMeta}</div>
 
       {!stopped && !isPrivate && shareSlug ? (
         <ShareBlock slug={shareSlug} />
@@ -147,8 +145,7 @@ export function SummaryCard({
       ) : null}
 
       <div className="mt-3 text-[11px] text-subtle">
-        AI-generated review — may contain mistakes. Every issue links to the
-        exact lines on GitHub.
+        AI-generated review — may contain mistakes.
       </div>
     </div>
   );
@@ -159,9 +156,7 @@ function ShareBlock({ slug }: { slug: string }) {
 
   return (
     <div className="mt-3.5 flex items-center gap-2.5 border-t border-[#f0f0f2] pt-3.5">
-      <div className="shrink-0 text-[12px] font-semibold text-muted">
-        Share
-      </div>
+      <div className="shrink-0 text-[12px] font-semibold text-muted">Share</div>
       <div className="min-w-0 flex-1 truncate rounded-lg border border-border bg-[#f9f9fa] px-3 py-2 font-mono text-[12px] text-ink">
         {url.replace(/^https?:\/\//, "")}
       </div>

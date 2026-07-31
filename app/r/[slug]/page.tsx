@@ -94,8 +94,7 @@ export default async function SharedReviewPage({ params }: Props) {
         ) : null}
 
         <p className="mt-5 text-[12px] leading-[1.5] text-faint">
-          AI-generated review — may contain mistakes. Every issue links to the
-          exact lines on GitHub so you can verify.
+          AI-generated review — may contain mistakes.
         </p>
       </div>
     </div>
