@@ -18,6 +18,12 @@ const HEADLINES: Record<ErrorKind, string> = {
   "too-many-files": "This PR is too large to review",
 };
 
+const NON_RETRYABLE_KINDS: ReadonlySet<ErrorKind> = new Set([
+  "load",
+  "private",
+  "too-many-files",
+]);
+
 const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
   load: (
     <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
@@ -82,12 +88,14 @@ export function ErrorCard({
         >
           Edit URL
         </button>
-        <button
-          onClick={onTryAgain}
-          className="h-[34px] rounded-lg border border-border-strong bg-white px-4 text-[12.5px] font-semibold text-ink hover:border-subtle"
-        >
-          Try again
-        </button>
+        {NON_RETRYABLE_KINDS.has(kind) ? null : (
+          <button
+            onClick={onTryAgain}
+            className="h-[34px] rounded-lg border border-border-strong bg-white px-4 text-[12.5px] font-semibold text-ink hover:border-subtle"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>
   );
