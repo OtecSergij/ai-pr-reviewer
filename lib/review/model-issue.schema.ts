@@ -48,7 +48,7 @@ export const modelIssueSchema = z
       .string()
       .optional()
       .describe(
-        "Optional. A concrete fix as a short markdown snippet. If you are not confident in the fix, omit this field entirely — do not send an empty string or a guess."
+        "Optional. The replacement code for the flagged lines — raw code only, ready to paste into the file. No prose, no backticks or ``` fences, no explanations: reasoning belongs in body. If you are not confident in the fix, omit this field entirely — do not send an empty string or a guess."
       ),
   })
   .refine((v) => v.line_end >= v.line_start, {

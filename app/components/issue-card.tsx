@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { basename } from "@/lib/path";
 import type { Issue } from "@/lib/review/issue";
+import { parseSuggestion } from "@/lib/review/suggestion";
 import { SEVERITY_STYLES } from "./review-theme";
 import { CodeBlock } from "./code-block";
 import { CopyButton } from "./copy-button";
@@ -61,20 +62,31 @@ export const IssueCard = memo(function IssueCard({ issue }: { issue: Issue }) {
 });
 
 function Suggestion({ text }: { text: string }) {
+  const view = parseSuggestion(text);
+  const copyText = view.kind === "code" ? view.text : view.copyText;
+
   return (
     <div className="mx-[18px] mt-1 overflow-hidden rounded-lg border border-[#cce8d4]">
-      <div className="flex items-center justify-between border-b border-[#cce8d4] bg-[#f0fbf3] py-1.5 pl-3 pr-2">
+      <div className="flex min-h-[34px] items-center justify-between border-b border-[#cce8d4] bg-[#f0fbf3] py-1.5 pl-3 pr-2">
         <div className="text-[11.5px] font-semibold text-[#1a7f37]">
           Suggested change
         </div>
-        <CopyButton
-          text={text}
-          className="rounded-md border border-[#cce8d4] bg-white px-2.5 py-[3px] text-[11px] font-semibold text-[#1a7f37]"
-        />
+        {copyText !== null ? (
+          <CopyButton
+            text={copyText}
+            className="rounded-md border border-[#cce8d4] bg-white px-2.5 py-[3px] text-[11px] font-semibold text-[#1a7f37]"
+          />
+        ) : null}
       </div>
-      <pre className="m-0 overflow-x-auto bg-white px-3.5 py-3 font-mono text-[11.5px] leading-[1.6] text-[#1f2328]">
-        {text}
-      </pre>
+      {view.kind === "code" ? (
+        <pre className="m-0 overflow-x-auto bg-white px-3.5 py-3 font-mono text-[11.5px] leading-[1.6] text-[#1f2328]">
+          {text}
+        </pre>
+      ) : (
+        <div className="bg-white px-3.5 py-3 [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+          <Markdown>{text}</Markdown>
+        </div>
+      )}
     </div>
   );
 }
