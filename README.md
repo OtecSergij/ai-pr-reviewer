@@ -42,7 +42,3 @@ npm run dev
 Open http://localhost:3000.
 
 Startup validates the env and fails fast while anything is missing: real reviews need the provider keys and `GITHUB_PAT` filled in (plus Postgres and Redis). To boot without any keys, use the keyless demo below.
-
-### Keyless demo
-
-To run a demo without any keys, set `MOCK_REVIEW=1` in `.env.local` and paste `https://github.com/vercel/ms/pull/35` into the form: the app streams a fixture review without ever calling the LLM (it only needs network access to github.com for that public PR). Add `MOCK_OFFLINE=1` to serve GitHub from a canned fixture as well — the demo then needs no network at all, and any PR URL that parses works. Optionally set `MOCK_SCENARIO=<value>` to pick which fixture review is streamed and `MOCK_ERROR=<value>` to exercise the UI's error states — see `.env.example` for the allowed values.

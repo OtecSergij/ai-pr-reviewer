@@ -79,7 +79,7 @@ export function IdleScreen({
               <button
                 type="button"
                 onClick={() => onUrlChange(DEMO_PR_URL)}
-                className="my-2 flex h-[26px] shrink-0 items-center whitespace-nowrap border-l border-border-strong pl-3 pr-3.5 text-[12.5px] text-link hover:underline"
+                className="flex h-full shrink-0 items-center whitespace-nowrap pl-3 pr-3.5 text-[12.5px] text-link hover:underline"
               >
                 use demo PR
               </button>
