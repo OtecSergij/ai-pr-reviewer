@@ -87,7 +87,7 @@ export const AgentConsole = memo(function AgentConsole({
               el.scrollHeight - el.scrollTop - el.clientHeight < 40;
           }}
           className="overflow-y-auto bg-[#fcfcfd] px-4 py-3 transition-[height] duration-200"
-          style={trace ? { maxHeight: 480 } : { height: open ? 340 : 148 }}
+          style={trace ? { maxHeight: 550 } : { height: open ? 550 : 300 }}
         >
           {rows.map((entry, i) => {
             if (entry.kind === "tool") {
