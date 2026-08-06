@@ -18,9 +18,14 @@ import {
   isDegenerateText,
   isErrorKind,
   isTextEntry,
+  revealTranscript,
+  totalTextChars,
 } from "@/lib/review/transcript";
 
 type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
+
+const REVEAL_CHARS_PER_SECOND = 200;
+const NOMINAL_FRAME_MS = 1000 / 60;
 
 export type ReviewRunOptions = {
   anthropicKey?: string;
@@ -73,20 +78,45 @@ export function useReview() {
   const transcriptRef = useRef<TranscriptEntry[]>([]);
   const toolEntriesRef = useRef<TranscriptEntry[]>([]);
   const rafRef = useRef<number | null>(null);
-
-  const commitTranscript = useCallback(() => {
-    rafRef.current = null;
-    setTranscript(transcriptRef.current.slice());
-  }, []);
+  const revealedRef = useRef(0);
+  const lastFrameAtRef = useRef<number | null>(null);
 
   const scheduleCommit = useCallback(() => {
-    rafRef.current ??= requestAnimationFrame(commitTranscript);
-  }, [commitTranscript]);
+    if (rafRef.current != null) return;
+
+    function frame(now: number) {
+      rafRef.current = null;
+      const entries = transcriptRef.current;
+      const total = totalTextChars(entries);
+      const dt =
+        lastFrameAtRef.current === null
+          ? NOMINAL_FRAME_MS
+          : now - lastFrameAtRef.current;
+      const step = Math.max(
+        1,
+        Math.round((REVEAL_CHARS_PER_SECOND * dt) / 1000)
+      );
+      const revealed = Math.min(total, revealedRef.current + step);
+      revealedRef.current = revealed;
+      setTranscript(revealTranscript(entries, revealed));
+      if (revealed < total) {
+        lastFrameAtRef.current = now;
+        rafRef.current = requestAnimationFrame(frame);
+      } else {
+        lastFrameAtRef.current = null;
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(frame);
+  }, []);
 
   const flushTranscript = useCallback(() => {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    commitTranscript();
-  }, [commitTranscript]);
+    rafRef.current = null;
+    lastFrameAtRef.current = null;
+    revealedRef.current = totalTextChars(transcriptRef.current);
+    setTranscript(transcriptRef.current.slice());
+  }, []);
 
   const clearReviewState = useCallback(() => {
     transcriptRef.current = [];
