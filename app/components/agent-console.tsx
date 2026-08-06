@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useId, useRef, useState } from "react";
 import type { TranscriptEntry } from "@/lib/review/transcript";
-import { countSteps } from "@/lib/review/transcript";
+import { countSteps, isTextEntry } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
 import { toolLabel, statusLabel, providerLabel, reasonLabel } from "./transcript";
@@ -16,10 +16,10 @@ function isConsoleEntry(entry: TranscriptEntry): boolean {
   if (entry.kind === "tool") {
     return entry.toolName !== REVIEW_TOOL_NAMES.emitIssue;
   }
-  if (entry.kind === "failover") {
-    return true;
+  if (isTextEntry(entry)) {
+    return entry.text !== "";
   }
-  return entry.text !== "";
+  return true;
 }
 
 export const AgentConsole = memo(function AgentConsole({
@@ -58,9 +58,9 @@ export const AgentConsole = memo(function AgentConsole({
         {trace ? null : (
           <Spinner className="h-3.5 w-3.5 shrink-0 border-[#c7d2fe] border-t-[#4f46e5]" />
         )}
-        <span className="shrink-0 text-[13px] font-semibold text-ink">
+        <h2 className="shrink-0 text-[13px] font-semibold text-ink">
           {trace ? "Agent trace" : current ? current.label : "Starting review…"}
-        </span>
+        </h2>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#6e7781]">
           {trace ? "" : current?.detail ?? ""}
         </span>
@@ -129,7 +129,11 @@ export const AgentConsole = memo(function AgentConsole({
             return (
               <div
                 key={i}
-                className="whitespace-pre-wrap font-mono text-[12px] leading-[1.75] text-[#6e7781]"
+                className={`whitespace-pre-wrap font-mono text-[12px] leading-[1.75] ${
+                  entry.kind === "reasoning"
+                    ? "border-l border-border pl-2.5 italic text-[#6e7781]"
+                    : "text-muted"
+                }`}
                 style={{ marginTop: i === 0 ? 0 : 10 }}
               >
                 {entry.text}

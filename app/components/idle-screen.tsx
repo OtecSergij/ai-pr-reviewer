@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReviewRunOptions } from "@/app/hooks/review/use-review";
+import { MAX_CHANGED_FILES } from "@/lib/review/config";
 
 type IdleScreenProps = {
   url: string;
@@ -11,8 +12,14 @@ type IdleScreenProps = {
   onStart: (options: ReviewRunOptions) => void;
 };
 
-const INPUT_CLASS =
-  "h-[42px] w-full min-w-0 rounded-[9px] border border-border-strong bg-[#fafafa] px-3.5 font-mono text-[13px] text-ink outline-none focus:border-[#6366f1] focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]";
+const FIELD_BOX =
+  "h-[42px] w-full min-w-0 rounded-[9px] border border-border-strong bg-[#fafafa] focus-within:border-[#6366f1] focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]";
+
+const FIELD_TEXT = "px-3.5 font-mono text-[13px] text-ink outline-none";
+
+const INPUT_CLASS = `${FIELD_BOX} ${FIELD_TEXT}`;
+
+const DEMO_PR_URL = "https://github.com/OtecSergij/ai-pr-reviewer/pull/6";
 
 export function IdleScreen({
   url,
@@ -37,7 +44,7 @@ export function IdleScreen({
 
   return (
     <div className="flex min-h-screen justify-center px-6 pb-[60px] pt-[130px]">
-      <div className="animate-fade-up w-full max-w-[620px]">
+      <div className="animate-fade-up w-full max-w-[750px]">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink font-mono text-[12px] font-semibold text-white">
             PR
@@ -56,16 +63,27 @@ export function IdleScreen({
           onSubmit={submit}
           className="mt-7 rounded-[14px] border border-border bg-white p-[18px] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"
         >
-          <div className="flex gap-2.5">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => onUrlChange(e.target.value)}
-              required
-              placeholder="https://github.com/owner/repo/pull/123"
-              aria-label="GitHub pull request URL"
-              className={INPUT_CLASS}
-            />
+          <div className="flex flex-wrap gap-2.5">
+            <div
+              className={`${FIELD_BOX} flex min-w-0 flex-1 basis-[260px] items-center`}
+            >
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => onUrlChange(e.target.value)}
+                required
+                placeholder="https://github.com/owner/repo/pull/123"
+                aria-label="GitHub pull request URL"
+                className={`h-full w-full min-w-0 bg-transparent ${FIELD_TEXT}`}
+              />
+              <button
+                type="button"
+                onClick={() => onUrlChange(DEMO_PR_URL)}
+                className="flex h-full shrink-0 items-center whitespace-nowrap pl-3 pr-3.5 text-[12.5px] text-link hover:underline"
+              >
+                use demo PR
+              </button>
+            </div>
             <button
               type="submit"
               className="h-[42px] shrink-0 rounded-[9px] border border-ink bg-ink px-[22px] text-[14px] font-semibold text-white hover:bg-ink-soft"
@@ -149,6 +167,10 @@ export function IdleScreen({
             </div>
           ) : null}
         </form>
+
+        <p className="mt-3 text-[11.5px] text-faint">
+          Reviews pull requests with up to {MAX_CHANGED_FILES} changed files.
+        </p>
       </div>
     </div>
   );

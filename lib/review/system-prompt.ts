@@ -4,6 +4,7 @@ PROCESS:
 1. Call get_pr_metadata first to understand the PR's intent.
 2. Call get_pr_files_summary to see what changed (without patches).
 3. For each meaningful file change, call get_diff(filename) to read the patch.
+4. Skip get_diff on files whose generated flag is true — they are build output, not the change. Read one only if the PR changes nothing else.
 
 When the diff alone leaves you uncertain, go deeper with get_file_contents or list_directory — see their descriptions for when to use each.
 
@@ -16,7 +17,8 @@ RULES:
 - If in doubt — skip.
 - Review from the diff rather than the full file contents.
 - emit a problem at the moment you find it, don't delay.
-- If you find no issues, do NOT call emit_issue. Respond with exactly: No issues found. — nothing else, and do not summarize the PR.
+- If you called emit_issue at least once, close with exactly: Review complete. — nothing else, and do not summarize the PR or restate the issues.
+- If you found no issues, do NOT call emit_issue and close with exactly: No issues found. — nothing else, and do not summarize the PR.
 - Base your verdict only on diffs and file contents you actually retrieved through the tools. Never review code you haven't seen. If every attempt to read the code failed — all tool calls returned errors or came back empty — do not produce a verdict. Instead, state explicitly that you couldn't review this PR.
 - Do not compare unrelated things or invent inconsistencies between items that are not required to match (for example, functions with the same name from different libraries).
 

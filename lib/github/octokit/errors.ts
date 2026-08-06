@@ -7,10 +7,7 @@ export class NotFoundError extends GitHubError {
     public readonly resource: string,
     options?: { cause?: unknown },
   ) {
-    super(
-      `Resource not found or inaccessible with current token: ${resource}`,
-      options,
-    );
+    super(`${resource} was not found, or access to it is restricted.`, options);
   }
 }
 

@@ -5,6 +5,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   ModelMessage,
+  type FinishReason,
 } from "ai";
 
 import { parsePRUrl, type PRRef } from "@/lib/github/parse-url";
@@ -23,8 +24,12 @@ import {
   classifyFailure,
   errorToMessage,
   errorToResponse,
+  pickVerdict,
+  CUT_SHORT_VERDICT,
+  type FailureVerdict,
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
+import { createFixtureGithubAccess } from "@/lib/review/mock/github-fixture";
 import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
 import { saveReview } from "@/lib/db/reviews";
 import { logger } from "@/lib/log";
@@ -32,6 +37,8 @@ import type { ErrorKind } from "@/lib/review/transcript";
 import { ReviewUIMessage } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
+const offlineGithub = env.MOCK_REVIEW && env.MOCK_OFFLINE;
+const persistMock = env.MOCK_REVIEW && env.MOCK_PERSIST;
 
 export async function runReview({
   prUrl,
@@ -50,7 +57,7 @@ export async function runReview({
 }): Promise<Response> {
   const log = logger.child({ requestId });
   const startedAt = Date.now();
-  const candidates = selectModels(anthropicKey);
+  const candidates = selectModels(anthropicKey, log);
 
   let pr: PRRef,
     gh: GithubAccess,
@@ -62,7 +69,24 @@ export async function runReview({
   try {
     pr = parsePRUrl(prUrl);
 
-    gh = createGithubAccess(githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT), pr);
+    gh = offlineGithub
+      ? createFixtureGithubAccess(pr)
+      : createGithubAccess(
+          githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT),
+          pr
+        );
+
+    log.info(
+      {
+        owner: pr.owner,
+        repo: pr.repo,
+        prNumber: pr.prNumber,
+        credential: githubCredential(githubPat),
+        mockReview: env.MOCK_REVIEW,
+        mockOffline: offlineGithub,
+      },
+      "github access created"
+    );
 
     const prMetadata = await gh.getPRMetadata();
 
@@ -88,7 +112,7 @@ export async function runReview({
         "review rejected: too many changed files"
       );
       return new Response(
-        `Too many files changed. PR size must be less than ${MAX_CHANGED_FILES} files.`,
+        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer.`,
         {
           status: 400,
           headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
@@ -140,6 +164,7 @@ export async function runReview({
 
       const tools = createReviewTools(gh, UIIssues, repo, writer, log);
       const streamMessages: ModelMessage[] = [...messages];
+      const verdicts: FailureVerdict[] = [];
 
       for (let i = 0; i < candidates.length; i++) {
         writer.write({
@@ -157,7 +182,19 @@ export async function runReview({
         });
 
         let failure: unknown = null;
+        let finishReason: FinishReason | null = null;
         const stepMessages: ModelMessage[] = [];
+
+        log.info(
+          {
+            index: i,
+            provider: candidates[i].provider,
+            modelId: candidates[i].modelId,
+            usesUserKey: candidates[i].usesUserKey,
+            mockError: env.MOCK_ERROR ?? null,
+          },
+          "model attempt started"
+        );
 
         const result = streamTextImpl({
           model: candidates[i].model,
@@ -185,22 +222,60 @@ export async function runReview({
           if (chunk.type === "error") {
             continue;
           }
+          if (chunk.type === "finish") {
+            finishReason = chunk.finishReason ?? null;
+          }
           writer.write(chunk);
         }
 
         if (!failure) {
-          if (!isPrivate && !signal.aborted && !env.MOCK_REVIEW) {
+          const cutShort = finishReason === "length";
+
+          if (cutShort && i < candidates.length - 1) {
+            log.warn(
+              {
+                from: candidates[i].provider,
+                to: candidates[i + 1].provider,
+                reason: "too-large",
+                finishReason,
+              },
+              "provider failover: output cut short"
+            );
+
+            writer.write({
+              type: "data-failover",
+              transient: true,
+              data: {
+                from: candidates[i].provider,
+                to: candidates[i + 1].provider,
+                reason: "too-large",
+              },
+            });
+
+            verdicts.push(CUT_SHORT_VERDICT);
+            streamMessages.push(...sanitizeForHandoff(stepMessages));
+            continue;
+          }
+
+          const skipped = saveSkipReason(isPrivate, signal.aborted, cutShort);
+
+          if (skipped) {
+            log.info({ reason: skipped }, "review not saved");
+          } else {
             let slug: string | null = null;
             try {
-              slug = await saveReview({
-                owner: pr.owner,
-                repo: pr.repo,
-                prNumber: pr.prNumber,
-                headSha,
-                prTitle: title,
-                issues: [...UIIssues.values()],
-                provider: candidates[i].modelId,
-              });
+              slug = await saveReview(
+                {
+                  owner: pr.owner,
+                  repo: pr.repo,
+                  prNumber: pr.prNumber,
+                  headSha,
+                  prTitle: title,
+                  issues: [...UIIssues.values()],
+                  provider: candidates[i].modelId,
+                },
+                log
+              );
             } catch (e) {
               log.error(
                 {
@@ -229,6 +304,7 @@ export async function runReview({
               prNumber: pr.prNumber,
               provider: candidates[i].modelId,
               issues: UIIssues.size,
+              finishReason,
               durationMs: Date.now() - startedAt,
             },
             "review finished"
@@ -240,9 +316,11 @@ export async function runReview({
           userKey: candidates[i].usesUserKey,
         });
 
-        if (knownError.reason === "aborted") {
+        if (knownError.reason === "aborted" && signal.aborted) {
           return;
         }
+
+        verdicts.push(knownError);
 
         if (i < candidates.length - 1 && knownError.hop) {
           log.warn(
@@ -269,16 +347,19 @@ export async function runReview({
           continue;
         }
 
+        const shown = knownError.hop ? pickVerdict(verdicts) : knownError;
+
         log.error(
           {
             err: failure,
             reason: knownError.reason,
+            shownReason: shown.reason,
             provider: candidates[i].modelId,
           },
           "review failed after providers exhausted"
         );
 
-        writer.write({ type: "error", errorText: knownError.message });
+        writer.write({ type: "error", errorText: shown.message });
         return;
       }
     },
@@ -286,6 +367,24 @@ export async function runReview({
   });
 
   return createUIMessageStreamResponse({ stream });
+}
+
+function githubCredential(githubPat?: string): string {
+  if (offlineGithub) return "fixture";
+  if (githubPat) return "user-pat";
+  return env.MOCK_REVIEW ? "anonymous" : "server-pat";
+}
+
+function saveSkipReason(
+  isPrivate: boolean,
+  aborted: boolean,
+  cutShort: boolean
+): "private" | "aborted" | "truncated" | "mock" | null {
+  if (isPrivate) return "private";
+  if (aborted) return "aborted";
+  if (cutShort) return "truncated";
+  if (env.MOCK_REVIEW && !persistMock) return "mock";
+  return null;
 }
 
 function sanitizeForHandoff(messages: ModelMessage[]): ModelMessage[] {

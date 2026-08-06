@@ -1,6 +1,7 @@
 import "server-only";
 import { redis, ensureRedisConnection } from "@/lib/redis";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/log";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -47,6 +48,26 @@ return {1, 0, 0}
 `;
 
 function createRateLimiter(prefix: string, tiers: Tier[]) {
+  const log = logger.child({ component: "rate-limit", limiter: prefix });
+
+  const decide = (
+    id: string,
+    gate: RateLimitGate,
+    blockedTier: string | null
+  ): RateLimitGate => {
+    log.debug(
+      {
+        id,
+        allowed: gate.allowed,
+        blockedTier,
+        retryAfterMs: gate.allowed ? null : gate.retryAfterMs,
+        redisReady: redis.isReady,
+      },
+      "rate limit decision"
+    );
+    return gate;
+  };
+
   return {
     async check(id: string): Promise<RateLimitGate> {
       try {
@@ -59,7 +80,7 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
         } finally {
           connectTimeout.cancel();
         }
-        if (!redis.isReady) return { allowed: true };
+        if (!redis.isReady) return decide(id, { allowed: true }, null);
 
         const evalTimeout = timeoutAfter(EVAL_TIMEOUT_MS);
         let reply: [number, number, number];
@@ -82,12 +103,19 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
           evalTimeout.cancel();
         }
 
-        const [allowed, , retryAfterMs] = reply;
-        if (allowed === 1) return { allowed: true };
+        const [allowed, blocked, retryAfterMs] = reply;
+        if (allowed === 1) return decide(id, { allowed: true }, null);
 
-        return { allowed: false, retryAfterMs };
+        return decide(
+          id,
+          { allowed: false, retryAfterMs },
+          tiers[blocked - 1]?.label ?? null
+        );
       } catch (error) {
-        console.error(`[rate-limit] ${prefix}: Redis check failed, allowing request`, error);
+        log.error(
+          { err: error, id, allowed: true, redisReady: redis.isReady },
+          "rate limit check failed, allowing request"
+        );
         return { allowed: true };
       }
     },
@@ -137,6 +165,6 @@ export const requestLimiter = createRateLimiter("rl:req", [
 ]);
 
 export const reviewLimiter = createRateLimiter("rl:review", [
-  { label: "hour", limit: 3, windowMs: HOUR_MS },
+  { label: "hour", limit: 8, windowMs: HOUR_MS },
   { label: "day", limit: 10, windowMs: DAY_MS },
 ]);

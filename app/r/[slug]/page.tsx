@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getReview, isReviewSlug } from "@/lib/db/reviews";
+import { AppHeader } from "@/app/components/app-header";
 import { IssueCard } from "@/app/components/issue-card";
 import { SEVERITY_STYLES, severityPills } from "@/app/components/review-theme";
 
@@ -39,14 +39,7 @@ export default async function SharedReviewPage({ params }: Props) {
   return (
     <div className="flex min-h-screen justify-center px-5 pb-[60px] pt-[50px]">
       <div className="w-full max-w-[820px]">
-        <Link href="/" className="flex w-fit items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-ink font-mono text-[12px] font-semibold text-white">
-            PR
-          </div>
-          <div className="text-[18px] font-bold tracking-[-0.02em] text-ink">
-            AI PR Reviewer
-          </div>
-        </Link>
+        <AppHeader />
 
         <div className="mt-6 rounded-xl border border-border bg-white p-[18px]">
           <a
@@ -101,8 +94,7 @@ export default async function SharedReviewPage({ params }: Props) {
         ) : null}
 
         <p className="mt-5 text-[12px] leading-[1.5] text-faint">
-          AI-generated review — may contain mistakes. Every issue links to the
-          exact lines on GitHub so you can verify.
+          AI-generated review — may contain mistakes.
         </p>
       </div>
     </div>

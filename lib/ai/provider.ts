@@ -4,6 +4,7 @@ import { createGroq } from "@ai-sdk/groq";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import type { LanguageModel } from "ai";
+import type { Logger } from "pino";
 import { env } from "@/lib/env";
 
 export type ProviderName = "cerebras" | "groq" | "google" | "anthropic";
@@ -15,22 +16,42 @@ export type ModelCandidate = {
   usesUserKey: boolean;
 };
 
-export function selectModels(anthropicKey?: string): ModelCandidate[] {
-  if (anthropicKey) {
-    const anthropic = createAnthropic({
-      apiKey: anthropicKey,
-      baseURL: "https://api.anthropic.com/v1",
-    });
-    return [
-      {
-        model: anthropic("claude-sonnet-4-6"),
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-6",
-        usesUserKey: true,
-      },
-    ];
-  }
+export function selectModels(
+  anthropicKey: string | undefined,
+  log: Logger
+): ModelCandidate[] {
+  const candidates = anthropicKey
+    ? userKeyChain(anthropicKey)
+    : serverKeyChain();
 
+  log.info(
+    {
+      byo: Boolean(anthropicKey),
+      modelIds: candidates.map((candidate) => candidate.modelId),
+    },
+    "model chain resolved"
+  );
+
+  return candidates;
+}
+
+function userKeyChain(anthropicKey: string): ModelCandidate[] {
+  const anthropic = createAnthropic({
+    apiKey: anthropicKey,
+    baseURL: "https://api.anthropic.com/v1",
+  });
+
+  return [
+    {
+      model: anthropic("claude-sonnet-4-6"),
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+      usesUserKey: true,
+    },
+  ];
+}
+
+function serverKeyChain(): ModelCandidate[] {
   const cerebras = createCerebras({ apiKey: env.CEREBRAS_API_KEY });
   const groq = createGroq({ apiKey: env.GROQ_API_KEY });
   const google = createGoogleGenerativeAI({

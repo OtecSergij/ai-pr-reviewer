@@ -22,12 +22,14 @@ export default function Home() {
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [fileFilter, setFileFilter] = useState<string | null>(null);
+  const [usedOwnKey, setUsedOwnKey] = useState(false);
 
   const {
     status,
     issues,
     error,
     errorKind,
+    finishReason,
     transcript,
     toolEntries,
     meta,
@@ -67,6 +69,7 @@ export default function Home() {
     const trimmed = url.trim();
     if (!trimmed) return;
     lastRunOptionsRef.current = options;
+    setUsedOwnKey(Boolean(options.anthropicKey));
     setSeverityFilter("all");
     setFileFilter(null);
     run(trimmed, options);
@@ -86,6 +89,7 @@ export default function Home() {
 
   const running = status === "running";
   const finished = status === "done" || status === "aborted";
+  const truncated = finishReason === "length";
   const filtered = issues.filter(
     (i) =>
       (severityFilter === "all" || i.severity === severityFilter) &&
@@ -98,6 +102,7 @@ export default function Home() {
         meta={meta}
         status={status}
         elapsed={elapsed}
+        truncated={truncated}
         tokens={totalTokens}
         onStop={stop}
         onHome={reset}
@@ -110,7 +115,7 @@ export default function Home() {
           : ""}
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1240px] items-start px-5">
+      <div className="mx-auto flex w-full max-w-[1240px] flex-col px-5 lg:flex-row lg:items-start">
         <ChangedFilesSidebar
           files={files}
           issues={issues}
@@ -121,7 +126,7 @@ export default function Home() {
           onFileClick={onFileClick}
         />
 
-        <main className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-4 pb-[90px] pl-6 pt-5">
+        <main className="flex min-w-0 max-w-[820px] flex-1 flex-col gap-4 pb-[90px] pl-0 pt-5 lg:pl-6">
           {status === "error" ? (
             <ErrorCard
               kind={errorKind ?? "review"}
@@ -142,6 +147,8 @@ export default function Home() {
               stepCount={countSteps(transcript)}
               elapsed={elapsed}
               stopped={status === "aborted"}
+              truncated={truncated}
+              usedOwnKey={usedOwnKey}
               isPrivate={meta?.isPrivate ?? visibility === "private"}
               shareSlug={shareSlug}
             />

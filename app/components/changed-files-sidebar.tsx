@@ -93,16 +93,16 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
   }, [toolEntries, changedSet]);
 
   return (
-    <aside className="sticky top-[54px] max-h-[calc(100vh-54px)] w-[296px] shrink-0 overflow-y-auto border-r border-border-subtle pb-10 pr-[18px] pt-5">
+    <aside className="w-full shrink-0 border-b border-border-subtle pb-5 pt-5 lg:sticky lg:top-[54px] lg:max-h-[calc(100vh-54px)] lg:w-[296px] lg:overflow-y-auto lg:border-b-0 lg:border-r lg:pb-10 lg:pr-[18px]">
       {hasError && files.length === 0 ? (
         <div className="pt-1 text-[12px] text-subtle">
           No pull request loaded.
         </div>
       ) : (
         <>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-faint">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-faint">
             Changed files · {files.length}
-          </div>
+          </h2>
           {files.map((file) => (
             <FileRow
               key={file.filename}
@@ -174,52 +174,58 @@ function FileRow({
 
   const border = filtered ? "border-[#a5b4fc]" : "border-border-subtle";
 
+  const label = [
+    file.filename,
+    file.status,
+    `${file.additions} added, ${file.deletions} removed`,
+    ...dotList.map((d) => severityCountLabel(d.severity, d.count)),
+    ...(visited ? ["read"] : []),
+  ].join(", ");
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className={`mt-2 cursor-pointer rounded-[10px] border px-3 py-2.5 hover:border-[#c7c7cd] ${border} ${bg}`}
+      aria-label={label}
+      className={`mt-2 block w-full cursor-pointer rounded-[10px] border px-3 py-2.5 text-left hover:border-[#c7c7cd] ${border} ${bg}`}
     >
-      <div className="flex items-center gap-2">
-        <div
+      <span className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
           className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] font-mono text-[10px] font-semibold"
           style={{ color: status.color, backgroundColor: status.bg }}
         >
           {status.char}
-        </div>
-        <div className="min-w-0 flex-1 truncate font-mono text-[12px] font-medium text-ink">
+        </span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-medium text-ink">
           {name}
-        </div>
+        </span>
         {active ? (
           <Spinner className="h-2.5 w-2.5 shrink-0 border-[#c7d2fe] border-t-[#4f46e5]" />
         ) : visited ? (
-          <span className="shrink-0 text-[11px] text-[#9ca3af]">✓</span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-[11px] text-[#9ca3af]"
+          >
+            ✓
+          </span>
         ) : null}
-      </div>
+      </span>
       {dir ? (
-        <div className="mt-[3px] truncate pl-[26px] font-mono text-[10.5px] text-[#9ca3af]">
+        <span className="mt-[3px] block truncate pl-[26px] font-mono text-[10.5px] text-[#9ca3af]">
           {dir}
-        </div>
+        </span>
       ) : null}
-      <div className="mt-1.5 flex items-center gap-3 pl-[26px]">
+      <span className="mt-1.5 flex items-center gap-3 pl-[26px]">
         <span className="font-mono text-[10.5px]">
           <span className="text-[#1a7f37]">+{file.additions}</span>{" "}
           <span className="text-[#cf222e]">−{file.deletions}</span>
         </span>
         {dotList.length > 0 ? (
-          <div className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="flex items-center gap-1.5">
             {dotList.map((d) => (
-              <div
+              <span
                 key={d.severity}
-                role="img"
-                aria-label={severityCountLabel(d.severity, d.count)}
                 className="animate-dot-pop flex items-center gap-1"
               >
                 <span
@@ -229,11 +235,11 @@ function FileRow({
                 <span className="font-mono text-[10.5px] text-muted">
                   {d.count}
                 </span>
-              </div>
+              </span>
             ))}
-          </div>
+          </span>
         ) : null}
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }

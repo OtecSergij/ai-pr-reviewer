@@ -18,7 +18,15 @@ const EnvSchema = z.object({
     z.string().url().default(DEFAULT_APP_URL)
   ),
   MOCK_REVIEW: z
-    .string()
+    .enum(["1", "0", ""])
+    .optional()
+    .transform((v) => v === "1"),
+  MOCK_OFFLINE: z
+    .enum(["1", "0", ""])
+    .optional()
+    .transform((v) => v === "1"),
+  MOCK_PERSIST: z
+    .enum(["1", "0", ""])
     .optional()
     .transform((v) => v === "1"),
   MOCK_ERROR: z.preprocess(
@@ -28,9 +36,32 @@ const EnvSchema = z.object({
         "api-retryable",
         "retry-exhausted",
         "api-400",
+        "api-401",
+        "api-403",
+        "api-404",
+        "api-413",
+        "api-429",
+        "context-overflow",
+        "abort",
         "load-key",
         "unknown",
         "tool-outcomes",
+        "first-only",
+        "mid-stream",
+      ])
+      .optional()
+  ),
+  MOCK_SCENARIO: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .enum([
+        "clean",
+        "rich",
+        "duplicate",
+        "long",
+        "interleaved-text",
+        "reasoning",
+        "finish-length",
       ])
       .optional()
   ),

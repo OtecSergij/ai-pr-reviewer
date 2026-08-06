@@ -19,6 +19,10 @@ export function isErrorKind(value: string): value is ErrorKind {
 
 export type ToolOutcome = "running" | "ok" | "skipped" | "failed";
 
+export type TranscriptTextKind = "text" | "reasoning";
+
+export type TranscriptTextEntry = { kind: TranscriptTextKind; text: string };
+
 export type TranscriptEntry =
   | {
       kind: "tool";
@@ -28,8 +32,50 @@ export type TranscriptEntry =
       outcome: ToolOutcome;
       note?: string;
     }
-  | { kind: "text"; text: string }
+  | TranscriptTextEntry
   | ({ kind: "failover" } & FailoverData);
+
+export function isTextEntry(
+  entry: TranscriptEntry
+): entry is TranscriptTextEntry {
+  return entry.kind === "text" || entry.kind === "reasoning";
+}
+
+const DEGENERATE_TEXT = new Set(["", "None", "null"]);
+
+export function isDegenerateText(text: string): boolean {
+  return DEGENERATE_TEXT.has(text.trim());
+}
+
+export function totalTextChars(entries: TranscriptEntry[]): number {
+  let total = 0;
+  for (const entry of entries) {
+    if (isTextEntry(entry)) total += entry.text.length;
+  }
+  return total;
+}
+
+export function revealTranscript(
+  entries: TranscriptEntry[],
+  budget: number
+): TranscriptEntry[] {
+  const out: TranscriptEntry[] = [];
+  let remaining = budget;
+  for (const entry of entries) {
+    if (!isTextEntry(entry)) {
+      out.push(entry);
+      continue;
+    }
+    if (entry.text.length <= remaining) {
+      remaining -= entry.text.length;
+      out.push(entry);
+      continue;
+    }
+    out.push({ kind: entry.kind, text: entry.text.slice(0, remaining) });
+    break;
+  }
+  return out;
+}
 
 export type ToolPath = { path: string; type: "file" | "dir" };
 

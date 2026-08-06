@@ -12,9 +12,56 @@ type SummaryCardProps = {
   stepCount: number;
   elapsed: number;
   stopped: boolean;
+  truncated: boolean;
+  usedOwnKey: boolean;
   isPrivate: boolean;
   shareSlug: string | null;
 };
+
+const OUTCOME = {
+  complete: {
+    accent: "#2da44e",
+    glyph: "✓",
+    title: "Review complete",
+  },
+  stopped: {
+    accent: "#d4a72c",
+    glyph: "!",
+    title: "Review stopped",
+  },
+  truncated: {
+    accent: "#d4a72c",
+    glyph: "!",
+    title: "Review cut short",
+  },
+} as const;
+
+const PRIVATE_NOTICE =
+  "Private review — results are not saved and no share link is created.";
+const STOPPED_NOTICE =
+  "Stopped reviews are not saved — run the review to completion to get a share link.";
+const TRUNCATED_FREE_NOTICE =
+  "This PR is too large for the free model to review in full — partial results aren't saved. Running with your own Anthropic key usually covers more.";
+const TRUNCATED_OWN_KEY_NOTICE =
+  "This PR is too large to review in full — partial results aren't saved.";
+
+function noticeText({
+  isPrivate,
+  stopped,
+  truncated,
+  usedOwnKey,
+}: {
+  isPrivate: boolean;
+  stopped: boolean;
+  truncated: boolean;
+  usedOwnKey: boolean;
+}): string | null {
+  if (isPrivate) return PRIVATE_NOTICE;
+  if (stopped) return STOPPED_NOTICE;
+  if (truncated)
+    return usedOwnKey ? TRUNCATED_OWN_KEY_NOTICE : TRUNCATED_FREE_NOTICE;
+  return null;
+}
 
 export function SummaryCard({
   issues,
@@ -22,6 +69,8 @@ export function SummaryCard({
   stepCount,
   elapsed,
   stopped,
+  truncated,
+  usedOwnKey,
   isPrivate,
   shareSlug,
 }: SummaryCardProps) {
@@ -31,11 +80,13 @@ export function SummaryCard({
   const repo = meta
     ? `${meta.owner}/${meta.repo} #${meta.prNumber}`
     : "this pull request";
-  const sub = stopped
-    ? `Partial results — ${n} issue${
-        n === 1 ? "" : "s"
-      } found before the run was stopped.`
-    : `Found ${n} issue${n === 1 ? "" : "s"} in ${repo}.`;
+  const variant =
+    OUTCOME[stopped ? "stopped" : truncated ? "truncated" : "complete"];
+  const sub =
+    stopped || truncated
+      ? null
+      : `Found ${n} issue${n === 1 ? "" : "s"} in ${repo}.`;
+  const notice = noticeText({ isPrivate, stopped, truncated, usedOwnKey });
   const head = meta?.headSha ? `head ${meta.headSha.slice(0, 7)}` : null;
   const doneMeta = [
     meta?.model,
@@ -51,16 +102,16 @@ export function SummaryCard({
       <div className="flex items-center gap-2.5">
         <div
           className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
-          style={{ backgroundColor: stopped ? "#d4a72c" : "#2da44e" }}
+          style={{ backgroundColor: variant.accent }}
         >
-          {stopped ? "!" : "✓"}
+          {variant.glyph}
         </div>
-        <div className="text-[16px] font-bold tracking-[-0.01em]">
-          {stopped ? "Review stopped" : "Review complete"}
-        </div>
+        <h2 className="text-[16px] font-bold tracking-[-0.01em]">
+          {variant.title}
+        </h2>
       </div>
 
-      <div className="mt-1.5 text-[13px] text-muted">{sub}</div>
+      {sub ? <div className="mt-1.5 text-[13px] text-muted">{sub}</div> : null}
 
       {pills.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -81,25 +132,20 @@ export function SummaryCard({
         </div>
       ) : null}
 
-      <div className="mt-3 font-mono text-[11px] text-faint">
-        {doneMeta}
-      </div>
+      <div className="mt-3 font-mono text-[11px] text-faint">{doneMeta}</div>
 
       {!stopped && !isPrivate && shareSlug ? (
         <ShareBlock slug={shareSlug} />
       ) : null}
 
-      {stopped || isPrivate ? (
+      {notice ? (
         <div className="mt-3.5 rounded-lg border border-border bg-[#f9f9fa] px-3 py-2.5 text-[12px] text-muted">
-          {isPrivate
-            ? "Private review — results are not saved and no share link is created."
-            : "Stopped reviews are not saved — run the review to completion to get a share link."}
+          {notice}
         </div>
       ) : null}
 
       <div className="mt-3 text-[11px] text-subtle">
-        AI-generated review — may contain mistakes. Every issue links to the
-        exact lines on GitHub.
+        AI-generated review — may contain mistakes.
       </div>
     </div>
   );
@@ -110,9 +156,7 @@ function ShareBlock({ slug }: { slug: string }) {
 
   return (
     <div className="mt-3.5 flex items-center gap-2.5 border-t border-[#f0f0f2] pt-3.5">
-      <div className="shrink-0 text-[12px] font-semibold text-muted">
-        Share
-      </div>
+      <div className="shrink-0 text-[12px] font-semibold text-muted">Share</div>
       <div className="min-w-0 flex-1 truncate rounded-lg border border-border bg-[#f9f9fa] px-3 py-2 font-mono text-[12px] text-ink">
         {url.replace(/^https?:\/\//, "")}
       </div>
