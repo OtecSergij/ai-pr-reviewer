@@ -126,14 +126,20 @@ export const AgentConsole = memo(function AgentConsole({
               );
             }
             const streaming = !trace && i === rows.length - 1;
+            if (entry.kind === "reasoning") {
+              return (
+                <ReasoningRow
+                  key={i}
+                  text={entry.text}
+                  streaming={streaming}
+                  first={i === 0}
+                />
+              );
+            }
             return (
               <div
                 key={i}
-                className={`whitespace-pre-wrap font-mono text-[12px] leading-[1.75] ${
-                  entry.kind === "reasoning"
-                    ? "border-l border-border pl-2.5 italic text-[#6e7781]"
-                    : "text-muted"
-                }`}
+                className="whitespace-pre-wrap font-mono text-[12px] leading-[1.75] text-muted"
                 style={{ marginTop: i === 0 ? 0 : 10 }}
               >
                 {entry.text}
@@ -146,3 +152,51 @@ export const AgentConsole = memo(function AgentConsole({
     </section>
   );
 });
+
+function ReasoningRow({
+  text,
+  streaming,
+  first,
+}: {
+  text: string;
+  streaming: boolean;
+  first: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+
+  const clamped = !streaming && !open;
+
+  useEffect(() => {
+    if (!clamped) return;
+    const el = textRef.current;
+    if (el) setClipped(el.scrollHeight > el.clientHeight);
+  }, [clamped, text]);
+
+  return (
+    <div
+      className="border-l border-border pl-2.5"
+      style={{ marginTop: first ? 0 : 10 }}
+    >
+      <div
+        ref={textRef}
+        className={`whitespace-pre-wrap font-mono text-[12px] italic leading-[1.75] text-[#6e7781] ${
+          clamped ? "line-clamp-3" : ""
+        }`}
+      >
+        {text}
+        {streaming ? <span className="text-subtle">▌</span> : null}
+      </div>
+      {(clamped && clipped) || open ? (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="mt-0.5 font-mono text-[11px] font-semibold text-subtle hover:text-muted"
+        >
+          {open ? "hide thinking" : "show thinking"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
