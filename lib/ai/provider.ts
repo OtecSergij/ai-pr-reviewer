@@ -60,15 +60,15 @@ function serverKeyChain(): ModelCandidate[] {
 
   return [
     {
-      model: cerebras("zai-glm-4.7"),
-      provider: "cerebras",
-      modelId: "zai-glm-4.7",
-      usesUserKey: false,
-    },
-    {
       model: groq("openai/gpt-oss-120b"),
       provider: "groq",
       modelId: "openai/gpt-oss-120b",
+      usesUserKey: false,
+    },
+    {
+      model: cerebras("zai-glm-4.7"),
+      provider: "cerebras",
+      modelId: "zai-glm-4.7",
       usesUserKey: false,
     },
     {

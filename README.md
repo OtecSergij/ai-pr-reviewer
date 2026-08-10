@@ -15,7 +15,7 @@ An AI agent that reviews GitHub pull requests: it walks the repository, reads th
 ## Stack
 
 - **Next.js 16** (App Router) + **Vercel AI SDK v6** — the review streams to the browser over SSE.
-- **Multiple model providers** (Cerebras / Groq / Gemini) with automatic fallback; premium path on Anthropic (BYO key).
+- **Multiple model providers** (Groq / Cerebras / Gemini) with automatic fallback; premium path on Anthropic (BYO key).
 - **PostgreSQL + Drizzle** — persisted share links, with an idempotent slug derived from the PR identity.
 - **Redis** — per-IP rate limiting (sliding-window, multi-tier); behind the proxy the deployment sets `TRUST_PROXY=1` so the limiter reads the real client IP instead of counting every visitor in one bucket.
 - **Self-hosted** on a VPS via Coolify + Traefik: the image is built in CI, pushed to GHCR, and auto-deployed on push to `main`; the long-running review stream passes through the proxy incrementally.
