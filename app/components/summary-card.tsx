@@ -87,6 +87,7 @@ export function SummaryCard({
       ? null
       : `Found ${n} issue${n === 1 ? "" : "s"} in ${repo}.`;
   const notice = noticeText({ isPrivate, stopped, truncated, usedOwnKey });
+  const onSonnet = meta?.model?.startsWith("claude") ?? usedOwnKey;
   const head = meta?.headSha ? `head ${meta.headSha.slice(0, 7)}` : null;
   const doneMeta = [
     meta?.model,
@@ -145,7 +146,9 @@ export function SummaryCard({
       ) : null}
 
       <div className="mt-3 text-[11px] text-subtle">
-        AI-generated review — may contain mistakes.
+        {onSonnet
+          ? "AI-generated review — may contain mistakes."
+          : "AI-generated review by a small free-tier model — may contain mistakes."}
       </div>
     </div>
   );

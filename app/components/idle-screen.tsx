@@ -113,15 +113,34 @@ export function IdleScreen({
               })}
             </div>
 
-            <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
-              <input
-                type="checkbox"
-                checked={premium}
-                onChange={(e) => setPremium(e.target.checked)}
-                className="m-0 h-3.5 w-3.5 accent-ink"
-              />
-              Use Claude Sonnet — bring your own API key
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-muted">
+                <input
+                  type="checkbox"
+                  checked={premium}
+                  onChange={(e) => setPremium(e.target.checked)}
+                  className="m-0 h-3.5 w-3.5 accent-ink"
+                />
+                Use Claude Sonnet — bring your own API key
+              </label>
+              <span className="group relative flex">
+                <button
+                  type="button"
+                  aria-describedby="sonnet-tip"
+                  className="flex h-[15px] w-[15px] cursor-default items-center justify-center rounded-full border border-border text-[9.5px] font-semibold text-subtle hover:border-[#c7c7cd] hover:text-muted"
+                >
+                  ?
+                </button>
+                <span
+                  id="sonnet-tip"
+                  role="tooltip"
+                  className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-[250px] -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-[11.5px] font-normal leading-[1.5] text-white opacity-0 shadow-[0_4px_12px_rgba(24,24,27,0.2)] transition-opacity duration-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                >
+                  Free reviews run on lightweight models with a tight context
+                  window — Sonnet reads deeper and covers more of the diff.
+                </span>
+              </span>
+            </div>
           </div>
 
           {visibility === "private" ? (

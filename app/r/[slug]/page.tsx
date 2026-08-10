@@ -94,7 +94,9 @@ export default async function SharedReviewPage({ params }: Props) {
         ) : null}
 
         <p className="mt-5 text-[12px] leading-[1.5] text-faint">
-          AI-generated review — may contain mistakes.
+          {review.provider.startsWith("claude")
+            ? "AI-generated review — may contain mistakes."
+            : "AI-generated review by a small free-tier model — may contain mistakes."}
         </p>
       </div>
     </div>
