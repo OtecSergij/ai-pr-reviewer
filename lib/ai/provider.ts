@@ -3,7 +3,11 @@ import { createCerebras } from "@ai-sdk/cerebras";
 import { createGroq } from "@ai-sdk/groq";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { LanguageModel } from "ai";
+import {
+  defaultSettingsMiddleware,
+  wrapLanguageModel,
+  type LanguageModel,
+} from "ai";
 import type { Logger } from "pino";
 import { env } from "@/lib/env";
 
@@ -60,19 +64,28 @@ function serverKeyChain(): ModelCandidate[] {
 
   return [
     {
-      model: cerebras("zai-glm-4.7"),
-      provider: "cerebras",
-      modelId: "zai-glm-4.7",
-      usesUserKey: false,
-    },
-    {
       model: groq("openai/gpt-oss-120b"),
       provider: "groq",
       modelId: "openai/gpt-oss-120b",
       usesUserKey: false,
     },
     {
-      model: google("gemini-2.5-flash"),
+      model: cerebras("zai-glm-4.7"),
+      provider: "cerebras",
+      modelId: "zai-glm-4.7",
+      usesUserKey: false,
+    },
+    {
+      model: wrapLanguageModel({
+        model: google("gemini-2.5-flash"),
+        middleware: defaultSettingsMiddleware({
+          settings: {
+            providerOptions: {
+              google: { thinkingConfig: { includeThoughts: true } },
+            },
+          },
+        }),
+      }),
       provider: "google",
       modelId: "gemini-2.5-flash",
       usesUserKey: false,
