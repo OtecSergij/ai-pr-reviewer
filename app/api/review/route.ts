@@ -6,6 +6,8 @@ import {
   requestLimiter,
 } from "@/lib/rate-limit";
 import { logger } from "@/lib/log";
+import { redis } from "@/lib/redis";
+import { createMemoryWindow } from "@/lib/memory-window";
 
 const requestSchema = z.object({
   prUrl: z.string().min(1).max(2048),
@@ -31,6 +33,14 @@ export async function POST(req: Request) {
     const res = rateLimitResponse(gate);
     res.headers.set("x-request-id", requestId);
     return res;
+  }
+
+  if (!redis.isReady) {
+    const fallback = createMemoryWindow(25);
+    if (!fallback.check(req)) {
+      log.info({ ip }, "request rejected: memory window limited");
+      return new Response("Too many requests", { status: 429 });
+    }
   }
 
   const contentType = req.headers.get("content-type");
