@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FinishReason, InferUIMessageChunk } from "ai";
+import type { FinishReason } from "ai";
 import type { Issue } from "@/lib/review/issue";
 import type {
+  OutcomeData,
   PRFileSummary,
   PRMeta,
-  ReviewUIMessage,
+  ReviewChunk,
 } from "@/lib/review/stream";
+import { nextFinishReason } from "@/lib/review/finish-reason";
 import type {
   ErrorKind,
   ReviewStatus,
@@ -21,8 +23,6 @@ import {
   revealTranscript,
   totalTextChars,
 } from "@/lib/review/transcript";
-
-type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
 
 const REVEAL_CHARS_PER_SECOND = 200;
 const NOMINAL_FRAME_MS = 1000 / 60;
@@ -68,6 +68,7 @@ export function useReview() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [finishReason, setFinishReason] = useState<FinishReason | null>(null);
+  const [outcome, setOutcome] = useState<OutcomeData | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
   const [files, setFiles] = useState<PRFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
@@ -127,6 +128,7 @@ export function useReview() {
     setError(null);
     setErrorKind(null);
     setFinishReason(null);
+    setOutcome(null);
     setMeta(null);
     setFiles([]);
     setTotalTokens(0);
@@ -250,7 +252,7 @@ export function useReview() {
 
               case "data-meta":
                 setMeta(chunk.data);
-                setFinishReason(null);
+                setFinishReason((current) => nextFinishReason(current, chunk));
                 break;
 
               case "data-files":
@@ -268,6 +270,10 @@ export function useReview() {
 
               case "data-share":
                 setShareSlug(chunk.data.slug);
+                break;
+
+              case "data-outcome":
+                setOutcome(chunk.data);
                 break;
 
               case "text-start":
@@ -338,7 +344,7 @@ export function useReview() {
                 break;
 
               case "finish":
-                setFinishReason(chunk.finishReason ?? null);
+                setFinishReason((current) => nextFinishReason(current, chunk));
                 break;
 
               default:
@@ -400,6 +406,7 @@ export function useReview() {
     error,
     errorKind,
     finishReason,
+    outcome,
     meta,
     files,
     totalTokens,

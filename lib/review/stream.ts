@@ -1,4 +1,4 @@
-import { UIMessage } from "ai";
+import { UIMessage, type InferUIMessageChunk } from "ai";
 import type { Issue } from "./issue";
 import type { PRFileStatus, PRFileSummary } from "@/lib/github/octokit";
 import type { ProviderName } from "@/lib/ai/provider";
@@ -18,6 +18,8 @@ export type UsageData = { tokens: number };
 
 export type ShareData = { slug: string };
 
+export type OutcomeData = { incomplete: boolean; saveFailed: boolean };
+
 export type PRMeta = {
   owner: string;
   repo: string;
@@ -36,7 +38,10 @@ export type ReviewUIMessage = UIMessage<
     failover: FailoverData;
     usage: UsageData;
     share: ShareData;
+    outcome: OutcomeData;
   } & {
     [K in typeof ISSUE_DATA_KEY]: Issue;
   }
 >;
+
+export type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;

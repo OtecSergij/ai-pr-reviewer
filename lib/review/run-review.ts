@@ -183,6 +183,8 @@ export async function runReview({
 
         let failure: unknown = null;
         let finishReason: FinishReason | null = null;
+        let steps = 0;
+        let lastStepHadToolCalls = false;
         const stepMessages: ModelMessage[] = [];
 
         log.info(
@@ -208,6 +210,10 @@ export async function runReview({
             failure = error;
           },
           onStepFinish: (step) => {
+            steps = step.stepNumber + 1;
+            lastStepHadToolCalls = step.toolCalls.some(
+              (call) => call.providerExecuted !== true
+            );
             stepMessages.push(...step.response.messages);
             log.info(
               {
@@ -245,7 +251,9 @@ export async function runReview({
         }
 
         if (!failure) {
-          const cutShort = finishReason === "length";
+          const exhausted = lastStepHadToolCalls && steps >= MAX_STEPS;
+          const cutShort = finishReason === "length" || exhausted;
+          const incomplete = finishReason === null || cutShort;
 
           if (cutShort && i < candidates.length - 1) {
             log.warn(
@@ -254,6 +262,7 @@ export async function runReview({
                 to: candidates[i + 1].provider,
                 reason: "too-large",
                 finishReason,
+                steps,
               },
               "provider failover: output cut short"
             );
@@ -273,12 +282,11 @@ export async function runReview({
             continue;
           }
 
-          const skipped = saveSkipReason(isPrivate, signal.aborted, cutShort);
+          const skipped = saveSkipReason(isPrivate, signal.aborted, incomplete);
+          let slug: string | null = null;
+          let saveFailed = false;
 
-          if (skipped) {
-            log.info({ reason: skipped }, "review not saved");
-          } else {
-            let slug: string | null = null;
+          if (!skipped) {
             try {
               slug = await saveReview(
                 {
@@ -303,8 +311,9 @@ export async function runReview({
                 },
                 "saveReview failed"
               );
-              slug = null;
+              saveFailed = true;
             }
+
             if (slug) {
               writer.write({
                 type: "data-share",
@@ -313,18 +322,32 @@ export async function runReview({
               });
             }
           }
-          log.info(
-            {
-              owner: pr.owner,
-              repo: pr.repo,
-              prNumber: pr.prNumber,
-              provider: candidates[i].modelId,
-              issues: UIIssues.size,
-              finishReason,
-              durationMs: Date.now() - startedAt,
-            },
-            "review finished"
-          );
+
+          writer.write({
+            type: "data-outcome",
+            data: { incomplete, saveFailed },
+            transient: true,
+          });
+
+          const summary = {
+            owner: pr.owner,
+            repo: pr.repo,
+            prNumber: pr.prNumber,
+            provider: candidates[i].modelId,
+            issues: UIIssues.size,
+            finishReason,
+            steps,
+            durationMs: Date.now() - startedAt,
+          };
+
+          if (slug) {
+            log.info({ ...summary, slug }, "review finished");
+          } else {
+            log.info(
+              { ...summary, reason: skipped ?? "save-failed" },
+              "review not saved"
+            );
+          }
           return;
         }
 
@@ -394,11 +417,11 @@ function githubCredential(githubPat?: string): string {
 function saveSkipReason(
   isPrivate: boolean,
   aborted: boolean,
-  cutShort: boolean
+  incomplete: boolean
 ): "private" | "aborted" | "truncated" | "mock" | null {
   if (isPrivate) return "private";
   if (aborted) return "aborted";
-  if (cutShort) return "truncated";
+  if (incomplete) return "truncated";
   if (env.MOCK_REVIEW && !persistMock) return "mock";
   return null;
 }

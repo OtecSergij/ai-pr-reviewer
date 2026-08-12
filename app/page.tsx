@@ -30,6 +30,7 @@ export default function Home() {
     error,
     errorKind,
     finishReason,
+    outcome,
     transcript,
     toolEntries,
     meta,
@@ -89,7 +90,7 @@ export default function Home() {
 
   const running = status === "running";
   const finished = status === "done" || status === "aborted";
-  const truncated = finishReason === "length";
+  const truncated = finishReason === "length" || (outcome?.incomplete ?? false);
   const filtered = issues.filter(
     (i) =>
       (severityFilter === "all" || i.severity === severityFilter) &&
@@ -151,6 +152,7 @@ export default function Home() {
               usedOwnKey={usedOwnKey}
               isPrivate={meta?.isPrivate ?? visibility === "private"}
               shareSlug={shareSlug}
+              saveFailed={outcome?.saveFailed ?? false}
             />
           ) : null}
 

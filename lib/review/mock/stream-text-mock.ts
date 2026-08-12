@@ -1,5 +1,4 @@
 import type {
-  InferUIMessageChunk,
   streamText,
   ToolCallOptions,
   ToolExecuteFunction,
@@ -9,7 +8,7 @@ import { env } from "@/lib/env";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { ReviewToolName } from "@/lib/review/tools/tool-names";
 import { modelIssueSchema } from "@/lib/review/model-issue.schema";
-import type { ReviewUIMessage } from "@/lib/review/stream";
+import type { ReviewChunk } from "@/lib/review/stream";
 import { errorToMessage } from "@/lib/review/errors";
 import {
   injectedStartError,
@@ -37,15 +36,13 @@ const FIRST_TOOL_STEP = 0;
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
-type MockChunk = InferUIMessageChunk<ReviewUIMessage>;
-
 export const streamTextMock = ((options: StreamTextOptions) => ({
   toUIMessageStream: () => mockUIStream(options),
 })) as unknown as typeof streamText;
 
 async function* mockUIStream(
   options: StreamTextOptions
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   try {
     for await (const chunk of reviewScenario(options)) {
       yield chunk;
@@ -58,7 +55,7 @@ async function* mockUIStream(
 
 async function* reviewScenario(
   options: StreamTextOptions
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const scopeId = createMockIdScope();
 
@@ -137,7 +134,7 @@ function assertScenarioIssues(scenario: MockScenario): void {
 async function* toolOutcomesDemo(
   options: StreamTextOptions,
   scopeId: MockIdScope
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const failedCallId = scopeId("demo-fail");
 
@@ -189,7 +186,7 @@ async function* toolOutcomesDemo(
 async function* textBlock(
   block: MockTextBlock,
   signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -208,7 +205,7 @@ async function* textBlock(
 async function* reasoningBlock(
   block: MockTextBlock,
   signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -228,7 +225,7 @@ async function* interleavedTextBlocks(
   first: MockTextBlock,
   second: MockTextBlock,
   signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -259,7 +256,7 @@ async function* toolStep(
   stepNumber: number,
   scopeId: MockIdScope,
   signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+): AsyncGenerator<ReviewChunk> {
   const { toolName, input } = step;
   const toolCallId = scopeId(step.toolCallId);
 
