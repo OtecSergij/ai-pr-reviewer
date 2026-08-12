@@ -18,6 +18,9 @@ export type ModelCandidate = {
   provider: ProviderName;
   modelId: string;
   usesUserKey: boolean;
+  contextWindow: number;
+  tpmBudget: number;
+  maxOutputTokens?: number;
 };
 
 export function selectModels(
@@ -51,6 +54,8 @@ function userKeyChain(anthropicKey: string): ModelCandidate[] {
       provider: "anthropic",
       modelId: "claude-sonnet-4-6",
       usesUserKey: true,
+      contextWindow: 1_000_000,
+      tpmBudget: 2_000_000,
     },
   ];
 }
@@ -68,12 +73,17 @@ function serverKeyChain(): ModelCandidate[] {
       provider: "groq",
       modelId: "openai/gpt-oss-120b",
       usesUserKey: false,
+      contextWindow: 131_072,
+      tpmBudget: 8_000,
     },
     {
-      model: cerebras("zai-glm-4.7"),
+      model: cerebras("gpt-oss-120b"),
       provider: "cerebras",
-      modelId: "zai-glm-4.7",
+      modelId: "gpt-oss-120b",
       usesUserKey: false,
+      contextWindow: 65_536,
+      tpmBudget: 30_000,
+      maxOutputTokens: 6_000,
     },
     {
       model: wrapLanguageModel({
@@ -89,6 +99,9 @@ function serverKeyChain(): ModelCandidate[] {
       provider: "google",
       modelId: "gemini-2.5-flash",
       usesUserKey: false,
+      contextWindow: 1_048_576,
+      tpmBudget: 250_000,
+      maxOutputTokens: 24_000,
     },
   ];
 }

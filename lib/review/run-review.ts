@@ -201,6 +201,7 @@ export async function runReview({
           system: SYSTEM,
           messages: streamMessages,
           tools,
+          maxOutputTokens: candidates[i].maxOutputTokens,
           stopWhen: candidates[i].usesUserKey ? () => false : stepCountIs(MAX_STEPS),
           abortSignal: signal,
           onError: ({ error }) => {
@@ -208,6 +209,21 @@ export async function runReview({
           },
           onStepFinish: (step) => {
             stepMessages.push(...step.response.messages);
+            log.info(
+              {
+                provider: candidates[i].provider,
+                modelId: candidates[i].modelId,
+                stepNumber: step.stepNumber,
+                maxOutputTokens: candidates[i].maxOutputTokens ?? null,
+                inputTokens: step.usage.inputTokens ?? null,
+                outputTokens: step.usage.outputTokens ?? null,
+                reasoningTokens:
+                  step.usage.outputTokenDetails.reasoningTokens ?? null,
+                totalTokens: step.usage.totalTokens ?? null,
+                finishReason: step.finishReason,
+              },
+              "model step usage"
+            );
             writer.write({
               type: "data-usage",
               data: {
