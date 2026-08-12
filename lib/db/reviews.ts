@@ -6,8 +6,7 @@ import { reviews, type ReviewRow } from "@/lib/db/schema";
 import type { Issue } from "@/lib/review/issue";
 import { reviewSlug, isReviewSlug, type ReviewIdentity } from "./slug";
 
-export { reviewSlug, isReviewSlug };
-export type { ReviewIdentity };
+export { isReviewSlug };
 
 const SAVE_TIMEOUT_MS = 2_000;
 

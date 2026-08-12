@@ -8,3 +8,8 @@ npm-debug.log*
 tsconfig.tsbuildinfo
 docs
 .claude
+.github
+test
+README.md
+LICENSE
+AGENTS.md

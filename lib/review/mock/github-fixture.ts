@@ -422,14 +422,11 @@ already supported.
 The unit table in the README is left as it is; documenting the new alias is
 follow-up work.
 `,
-  state: "open",
-  merged: false,
   isPrivate: false,
   baseRef: "master",
   headRef: "add-week-unit",
   headSha: HEAD_SHA,
   changedFiles: 3,
-  htmlUrl: "https://github.com/vercel/ms/pull/35",
 };
 
 const CHANGED_FILES: PRFileSummary[] = [

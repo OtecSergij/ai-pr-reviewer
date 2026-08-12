@@ -15,7 +15,7 @@ const EnvSchema = z.object({
     .transform((v) => v === "1"),
   APP_URL: z.preprocess(
     (v) => (v === "" ? undefined : v),
-    z.string().url().default(DEFAULT_APP_URL)
+    z.url().default(DEFAULT_APP_URL)
   ),
   MOCK_REVIEW: z
     .enum(["1", "0", ""])

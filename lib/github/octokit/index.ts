@@ -10,21 +10,15 @@ import {
   type PRFileSummary,
 } from "./get-pr-files";
 import { getFileContents, type FileContents } from "./get-file-contents";
-import {
-  listDirectory,
-  type DirectoryEntry,
-  type DirectoryEntryType,
-} from "./list-directory";
+import { listDirectory, type DirectoryEntry } from "./list-directory";
 import { GitHubApiError } from "./errors";
 
 export type {
   PRMetadata,
-  PRFile,
   PRFileStatus,
   PRFileSummary,
   FileContents,
   DirectoryEntry,
-  DirectoryEntryType,
 };
 export {
   NotFoundError,
@@ -52,7 +46,6 @@ export type GithubAccess = {
 
 const RETRY_OPTS = {
   baseMs: 500,
-  maxMs: 5000,
   retries: 2,
   isRetryable: (e: unknown) => {
     if (e instanceof GitHubApiError && e.status >= 500) {
@@ -137,7 +130,6 @@ async function withRetry<T>(
   options: {
     retries: number;
     baseMs: number;
-    maxMs: number;
     isRetryable: (e: unknown) => boolean;
   }
 ): Promise<T> {
@@ -149,7 +141,7 @@ async function withRetry<T>(
         throw e;
       }
 
-      const expo = Math.min(options.maxMs, options.baseMs * 2 ** attempt);
+      const expo = options.baseMs * 2 ** attempt;
 
       await new Promise((r) => setTimeout(r, Math.random() * expo));
     }
