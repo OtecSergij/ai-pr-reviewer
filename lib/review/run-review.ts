@@ -422,7 +422,7 @@ export async function runReview({
                   headSha,
                   prTitle: title,
                   issues: [...UIIssues.values()],
-                  provider: candidates[i].modelId,
+                  modelId: candidates[i].modelId,
                 },
                 log
               );

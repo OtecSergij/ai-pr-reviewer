@@ -16,7 +16,7 @@ try {
   try {
     await migrate(drizzle(sql), { migrationsFolder: "./drizzle" });
   } finally {
-    await sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`;
+    await sql`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`.catch(() => {});
   }
 } catch (error) {
   process.exitCode = 1;

@@ -8,42 +8,39 @@ import { reviewSlug, isReviewSlug, type ReviewIdentity } from "./slug";
 
 export { isReviewSlug };
 
-const SAVE_TIMEOUT_MS = 2_000;
-
 export async function saveReview(
   input: ReviewIdentity & {
     prTitle: string;
     issues: Issue[];
-    provider: string;
+    modelId: string;
   },
   log: Logger
 ): Promise<string> {
   const startedAt = Date.now();
   const slug = reviewSlug(input);
-  await Promise.race([
-    db
-      .insert(reviews)
-      .values({
-        slug,
+  await db
+    .insert(reviews)
+    .values({
+      slug,
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+      headSha: input.headSha,
+      prTitle: input.prTitle,
+      issues: input.issues,
+      modelId: input.modelId,
+    })
+    .onConflictDoUpdate({
+      target: reviews.slug,
+      set: {
         owner: input.owner,
         repo: input.repo,
-        prNumber: input.prNumber,
-        headSha: input.headSha,
         prTitle: input.prTitle,
         issues: input.issues,
-        provider: input.provider,
-      })
-      .onConflictDoUpdate({
-        target: reviews.slug,
-        set: {
-          prTitle: input.prTitle,
-          issues: input.issues,
-          provider: input.provider,
-          createdAt: sql`now()`,
-        },
-      }),
-    timeoutAfter(SAVE_TIMEOUT_MS),
-  ]);
+        modelId: input.modelId,
+        createdAt: sql`now()`,
+      },
+    });
 
   log.info(
     {
@@ -64,10 +61,4 @@ export async function getReview(slug: string): Promise<ReviewRow | null> {
     .where(eq(reviews.slug, slug))
     .limit(1);
   return row ?? null;
-}
-
-function timeoutAfter(ms: number): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(reject, ms, new Error("review save timed out"));
-  });
 }
