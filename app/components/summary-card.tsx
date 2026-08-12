@@ -9,7 +9,7 @@ import { CopyButton } from "./copy-button";
 type SummaryCardProps = {
   issues: Issue[];
   meta: PRMeta | null;
-  stepCount: number;
+  toolCallCount: number;
   elapsed: number;
   stopped: boolean;
   truncated: boolean;
@@ -72,7 +72,7 @@ function noticeText({
 export function SummaryCard({
   issues,
   meta,
-  stepCount,
+  toolCallCount,
   elapsed,
   stopped,
   truncated,
@@ -104,7 +104,7 @@ export function SummaryCard({
   const head = meta?.headSha ? `head ${meta.headSha.slice(0, 7)}` : null;
   const doneMeta = [
     meta?.model,
-    `${stepCount} steps`,
+    `${toolCallCount} tool calls`,
     formatElapsed(elapsed),
     head,
   ]

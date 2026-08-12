@@ -1,11 +1,103 @@
 import { describe, it, expect } from "vitest";
 import {
+  countToolCalls,
   isDegenerateText,
   partiallyReadFiles,
   patchPartOf,
+  revealTranscript,
   type TranscriptEntry,
 } from "./transcript";
 import { REVIEW_TOOL_NAMES } from "./tools/tool-names";
+
+describe("revealTranscript", () => {
+  const tool = (toolCallId: string): TranscriptEntry => ({
+    kind: "tool",
+    toolCallId,
+    toolName: REVIEW_TOOL_NAMES.getDiff,
+    input: { filename: "index.js" },
+    outcome: "ok",
+  });
+
+  const failover: TranscriptEntry = {
+    kind: "failover",
+    from: "groq",
+    to: "cerebras",
+    reason: "rate-limit",
+  };
+
+  it("reveals text up to the budget", () => {
+    expect(revealTranscript([{ kind: "text", text: "abcdef" }], 3)).toEqual([
+      { kind: "text", text: "abc" },
+    ]);
+  });
+
+  it("lets events past the cut through in full", () => {
+    const entries = [{ kind: "text", text: "abcdef" } as const, tool("a"), failover];
+
+    expect(revealTranscript(entries, 2)).toEqual([
+      { kind: "text", text: "ab" },
+      tool("a"),
+      failover,
+    ]);
+  });
+
+  it("empties the text that follows the cut instead of dropping it", () => {
+    const entries: TranscriptEntry[] = [
+      { kind: "text", text: "abcdef" },
+      { kind: "reasoning", text: "ghi" },
+    ];
+
+    expect(revealTranscript(entries, 2)).toEqual([
+      { kind: "text", text: "ab" },
+      { kind: "reasoning", text: "" },
+    ]);
+  });
+
+  it("never counts an unrevealed text entry as a tool call", () => {
+    const entries: TranscriptEntry[] = [
+      { kind: "text", text: "abcdef" },
+      tool("a"),
+      { kind: "reasoning", text: "ghi" },
+      tool("b"),
+    ];
+
+    expect(countToolCalls(revealTranscript(entries, 1))).toBe(2);
+    expect(countToolCalls(revealTranscript(entries, 0))).toBe(2);
+  });
+
+  it("keeps every entry at its original index for any budget", () => {
+    const entries: TranscriptEntry[] = [
+      { kind: "text", text: "abc" },
+      tool("a"),
+      { kind: "reasoning", text: "defgh" },
+      failover,
+      { kind: "text", text: "ij" },
+      tool("b"),
+    ];
+
+    for (let budget = 0; budget <= 12; budget += 1) {
+      const revealed = revealTranscript(entries, budget);
+
+      expect(revealed).toHaveLength(entries.length);
+      revealed.forEach((entry, i) => {
+        expect(entry.kind).toBe(entries[i].kind);
+        if (entry.kind === "tool" && entries[i].kind === "tool") {
+          expect(entry).toBe(entries[i]);
+        }
+      });
+    }
+  });
+
+  it("returns the whole transcript once the budget covers it", () => {
+    const entries: TranscriptEntry[] = [
+      { kind: "text", text: "abc" },
+      tool("a"),
+      { kind: "reasoning", text: "de" },
+    ];
+
+    expect(revealTranscript(entries, 5)).toEqual(entries);
+  });
+});
 
 describe("isDegenerateText", () => {
   it("treats a bare None as degenerate", () => {

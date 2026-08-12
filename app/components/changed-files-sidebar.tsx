@@ -186,6 +186,7 @@ function FileRow({
     ...(file.generated ? ["generated"] : []),
     ...dotList.map((d) => severityCountLabel(d.severity, d.count)),
     ...(visited ? [partial ? "read in part" : "read"] : []),
+    ...(filtered ? ["filtering issues"] : []),
   ].join(", ");
 
   return (

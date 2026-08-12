@@ -51,6 +51,7 @@ export const SeverityFilters = memo(function SeverityFilters({
           <button
             key={c.key}
             onClick={() => onSeverityChange(c.key)}
+            aria-pressed={active}
             className={`flex h-7 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold ${
               active
                 ? "border-ink bg-ink text-white"
@@ -72,6 +73,7 @@ export const SeverityFilters = memo(function SeverityFilters({
       {fileFilter ? (
         <button
           onClick={onClearFileFilter}
+          aria-label={`Clear the file filter on ${basename(fileFilter)}`}
           className="flex h-7 items-center gap-1.5 rounded-full border border-[#c7d2fe] bg-[#eef2ff] px-3 font-mono text-[11.5px] font-semibold text-[#4338ca]"
         >
           {basename(fileFilter)} ✕

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { ReviewRunOptions } from "@/app/hooks/review/use-review";
 import { MAX_CHANGED_FILES } from "@/lib/review/config";
 
@@ -9,6 +8,12 @@ type IdleScreenProps = {
   onUrlChange: (url: string) => void;
   visibility: "public" | "private";
   onVisibilityChange: (v: "public" | "private") => void;
+  premium: boolean;
+  onPremiumChange: (premium: boolean) => void;
+  premiumKey: string;
+  onPremiumKeyChange: (key: string) => void;
+  pat: string;
+  onPatChange: (pat: string) => void;
   onStart: (options: ReviewRunOptions) => void;
 };
 
@@ -26,12 +31,14 @@ export function IdleScreen({
   onUrlChange,
   visibility,
   onVisibilityChange,
+  premium,
+  onPremiumChange,
+  premiumKey,
+  onPremiumKeyChange,
+  pat,
+  onPatChange,
   onStart,
 }: IdleScreenProps) {
-  const [premium, setPremium] = useState(false);
-  const [pat, setPat] = useState("");
-  const [premiumKey, setPremiumKey] = useState("");
-
   function submit(e: React.FormEvent) {
     e.preventDefault();
     onStart({
@@ -93,7 +100,11 @@ export function IdleScreen({
           </div>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-[18px]">
-            <div className="flex gap-0.5 rounded-lg bg-surface-subtle p-[3px]">
+            <div
+              role="group"
+              aria-label="Pull request visibility"
+              className="flex gap-0.5 rounded-lg bg-surface-subtle p-[3px]"
+            >
               {(["public", "private"] as const).map((v) => {
                 const active = visibility === v;
                 return (
@@ -101,6 +112,7 @@ export function IdleScreen({
                     key={v}
                     type="button"
                     onClick={() => onVisibilityChange(v)}
+                    aria-pressed={active}
                     className={`rounded-md px-3.5 py-1.5 text-[12.5px] font-semibold ${
                       active
                         ? "bg-white text-ink shadow-[0_1px_2px_rgba(24,24,27,0.08)]"
@@ -118,7 +130,7 @@ export function IdleScreen({
                 <input
                   type="checkbox"
                   checked={premium}
-                  onChange={(e) => setPremium(e.target.checked)}
+                  onChange={(e) => onPremiumChange(e.target.checked)}
                   className="m-0 h-3.5 w-3.5 accent-ink"
                 />
                 Use Claude Sonnet — bring your own API key
@@ -126,6 +138,7 @@ export function IdleScreen({
               <span className="group relative flex">
                 <button
                   type="button"
+                  aria-label="Why bring your own Anthropic API key"
                   aria-describedby="sonnet-tip"
                   className="flex h-[15px] w-[15px] cursor-default items-center justify-center rounded-full border border-border text-[9.5px] font-semibold text-subtle hover:border-[#c7c7cd] hover:text-muted"
                 >
@@ -148,7 +161,7 @@ export function IdleScreen({
               <input
                 type="password"
                 value={pat}
-                onChange={(e) => setPat(e.target.value.trim())}
+                onChange={(e) => onPatChange(e.target.value.trim())}
                 required
                 placeholder="GitHub personal access token (ghp_…)"
                 aria-label="GitHub personal access token"
@@ -174,7 +187,7 @@ export function IdleScreen({
               <input
                 type="password"
                 value={premiumKey}
-                onChange={(e) => setPremiumKey(e.target.value)}
+                onChange={(e) => onPremiumKeyChange(e.target.value)}
                 required
                 placeholder="Anthropic API key (sk-ant-…)"
                 aria-label="Anthropic API key"

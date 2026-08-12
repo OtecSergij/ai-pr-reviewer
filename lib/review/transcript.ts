@@ -77,7 +77,7 @@ export function revealTranscript(
       continue;
     }
     out.push({ kind: entry.kind, text: entry.text.slice(0, remaining) });
-    break;
+    remaining = 0;
   }
   return out;
 }
@@ -149,7 +149,7 @@ export function partiallyReadFiles(entries: TranscriptEntry[]): Set<string> {
   return partial;
 }
 
-export function countSteps(transcript: TranscriptEntry[]): number {
+export function countToolCalls(transcript: TranscriptEntry[]): number {
   return transcript.filter(
     (e) => e.kind === "tool" && e.toolName !== REVIEW_TOOL_NAMES.emitIssue
   ).length;

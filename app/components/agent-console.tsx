@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useId, useRef, useState } from "react";
 import type { TranscriptEntry } from "@/lib/review/transcript";
-import { countSteps, isTextEntry } from "@/lib/review/transcript";
+import { countToolCalls, isTextEntry } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
 import {
@@ -11,13 +11,19 @@ import {
   partLabel,
   providerLabel,
   reasonLabel,
-} from "./transcript";
+} from "./transcript-labels";
 
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
   mode?: "live" | "trace";
   notice?: string | null;
 };
+
+const BOLD_MARKER = /\*\*/g;
+
+function stripBoldMarkers(text: string): string {
+  return text.replace(BOLD_MARKER, "");
+}
 
 function isConsoleEntry(entry: TranscriptEntry): boolean {
   if (entry.kind === "tool") {
@@ -40,9 +46,12 @@ export const AgentConsole = memo(function AgentConsole({
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
-  const rows = transcript.filter(isConsoleEntry);
-  const stepCount = countSteps(transcript);
-  const lastTool = rows.filter((e) => e.kind === "tool").at(-1);
+  const rows = transcript.flatMap((entry, index) =>
+    isConsoleEntry(entry) ? [{ entry, index }] : []
+  );
+  const toolCalls = countToolCalls(transcript);
+  const lastTextRow = rows.findLastIndex(({ entry }) => isTextEntry(entry));
+  const lastTool = rows.map((r) => r.entry).findLast((e) => e.kind === "tool");
   const current =
     lastTool && lastTool.kind === "tool"
       ? toolLabel(lastTool.toolName, lastTool.input)
@@ -73,11 +82,11 @@ export const AgentConsole = memo(function AgentConsole({
           {trace ? "" : current?.detail ?? ""}
         </span>
         <span className="shrink-0 font-mono text-[10.5px] text-subtle">
-          {trace ? `${stepCount} steps` : `step ${stepCount}`}
+          {trace ? `${toolCalls} tool calls` : `call ${toolCalls}`}
         </span>
         <button
           onClick={() => setOpen((v) => !v)}
-          aria-expanded={trace ? open : undefined}
+          aria-expanded={open}
           aria-controls={bodyShown ? bodyId : undefined}
           className="shrink-0 rounded-md border border-border bg-white px-2.5 py-1 text-[11px] font-semibold text-muted hover:border-[#c7c7cd]"
         >
@@ -106,13 +115,13 @@ export const AgentConsole = memo(function AgentConsole({
           className="overflow-y-auto bg-[#fcfcfd] px-4 py-3 transition-[height] duration-200"
           style={trace ? { maxHeight: 550 } : { height: open ? 550 : 300 }}
         >
-          {rows.map((entry, i) => {
+          {rows.map(({ entry, index }, i) => {
             if (entry.kind === "tool") {
               const { label, detail } = toolLabel(entry.toolName, entry.input);
               const part = partLabel(entry.patchPart);
               return (
                 <div
-                  key={i}
+                  key={`entry-${index}`}
                   className="whitespace-pre-wrap font-mono text-[12px] font-medium leading-[1.75] text-[#6366f1]"
                   style={{ marginTop: i === 0 ? 0 : 12 }}
                 >
@@ -134,7 +143,7 @@ export const AgentConsole = memo(function AgentConsole({
             if (entry.kind === "failover") {
               return (
                 <div
-                  key={i}
+                  key={`entry-${index}`}
                   className="my-2 flex items-center gap-2 font-mono text-[11px] font-semibold text-[#9a6700]"
                 >
                   <span className="h-px flex-1 bg-[#f0e3c8]" />
@@ -146,11 +155,11 @@ export const AgentConsole = memo(function AgentConsole({
                 </div>
               );
             }
-            const streaming = !trace && i === rows.length - 1;
+            const streaming = !trace && i === lastTextRow;
             if (entry.kind === "reasoning") {
               return (
                 <ReasoningRow
-                  key={i}
+                  key={`entry-${index}`}
                   text={entry.text}
                   streaming={streaming}
                   first={i === 0}
@@ -159,7 +168,7 @@ export const AgentConsole = memo(function AgentConsole({
             }
             return (
               <div
-                key={i}
+                key={`entry-${index}`}
                 className="whitespace-pre-wrap font-mono text-[12px] leading-[1.75] text-muted"
                 style={{ marginTop: i === 0 ? 0 : 10 }}
               >
@@ -206,7 +215,7 @@ function ReasoningRow({
           clamped ? "line-clamp-3" : ""
         }`}
       >
-        {text}
+        {stripBoldMarkers(text)}
         {streaming ? <span className="text-subtle">▌</span> : null}
       </div>
       {(clamped && clipped) || open ? (

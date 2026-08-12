@@ -6,7 +6,7 @@ import {
   type ReviewRunOptions,
 } from "@/app/hooks/review/use-review";
 import { useElapsed } from "@/app/hooks/review/use-elapsed";
-import { countSteps } from "@/lib/review/transcript";
+import { countToolCalls } from "@/lib/review/transcript";
 import type { SeverityFilter } from "./components/severity-filters";
 import { IdleScreen } from "./components/idle-screen";
 import { WorkspaceHeader } from "./components/workspace-header";
@@ -20,6 +20,9 @@ import { IssueCard } from "./components/issue-card";
 export default function Home() {
   const [url, setUrl] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [premium, setPremium] = useState(false);
+  const [premiumKey, setPremiumKey] = useState("");
+  const [pat, setPat] = useState("");
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [fileFilter, setFileFilter] = useState<string | null>(null);
   const [usedOwnKey, setUsedOwnKey] = useState(false);
@@ -59,13 +62,20 @@ export default function Home() {
     }
   }, [status]);
 
+  const lastRunOptionsRef = useRef<ReviewRunOptions>({});
+
+  const backToForm = useCallback(() => {
+    setPremiumKey("");
+    setPat("");
+    lastRunOptionsRef.current = {};
+    reset();
+  }, [reset]);
+
   const onFileClick = useCallback((filename: string) => {
     setSeverityFilter("all");
     setFileFilter((cur) => (cur === filename ? null : filename));
   }, []);
   const onClearFileFilter = useCallback(() => setFileFilter(null), []);
-
-  const lastRunOptionsRef = useRef<ReviewRunOptions>({});
 
   function start(options: ReviewRunOptions = {}) {
     const trimmed = url.trim();
@@ -84,6 +94,12 @@ export default function Home() {
         onUrlChange={setUrl}
         visibility={visibility}
         onVisibilityChange={setVisibility}
+        premium={premium}
+        onPremiumChange={setPremium}
+        premiumKey={premiumKey}
+        onPremiumKeyChange={setPremiumKey}
+        pat={pat}
+        onPatChange={setPat}
         onStart={start}
       />
     );
@@ -107,7 +123,7 @@ export default function Home() {
         truncated={truncated}
         tokens={totalTokens}
         onStop={stop}
-        onHome={reset}
+        onHome={backToForm}
         headingRef={workspaceHeadingRef}
       />
 
@@ -134,7 +150,7 @@ export default function Home() {
               kind={errorKind ?? "review"}
               message={error}
               requestId={requestId}
-              onEditUrl={reset}
+              onEditUrl={backToForm}
               onTryAgain={() => start(lastRunOptionsRef.current)}
               headingRef={errorHeadingRef}
             />
@@ -148,7 +164,7 @@ export default function Home() {
             <SummaryCard
               issues={issues}
               meta={meta}
-              stepCount={countSteps(transcript)}
+              toolCallCount={countToolCalls(transcript)}
               elapsed={elapsed}
               stopped={status === "aborted"}
               truncated={truncated}

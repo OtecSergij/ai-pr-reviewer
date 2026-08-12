@@ -3,10 +3,15 @@ import type { ModelIssue } from "./model-issue.schema";
 import type { Issue, CodeLine } from "./issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 import { parseUnifiedDiff } from "@/lib/github/diff";
+import { basename } from "@/lib/path";
 import { createHash } from "node:crypto";
 import type { Logger } from "pino";
 
 const WINDOW = 3;
+
+export function issueLanguage(file: string): string {
+  return basename(file).split(".").pop() || "text";
+}
 
 function normalizeModelText(s: string): string {
   return s
@@ -167,7 +172,7 @@ export async function enrichIssue(
     lineStart: issue.line_start,
     lineEnd: issue.line_end,
     blobUrl: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
-    language: issue.file.split(".").pop() || "text",
+    language: issueLanguage(issue.file),
     codeLines,
   };
 }

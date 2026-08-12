@@ -1,6 +1,8 @@
 "use client";
 
+import { startTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AppHeader } from "@/app/components/app-header";
 
 export default function SharedReviewError({
@@ -10,6 +12,8 @@ export default function SharedReviewError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+
   return (
     <div className="flex min-h-screen justify-center px-5 pb-[60px] pt-[50px]">
       <div className="w-full max-w-[820px]">
@@ -38,7 +42,12 @@ export default function SharedReviewError({
 
           <div className="mt-3.5 flex gap-2">
             <button
-              onClick={reset}
+              onClick={() =>
+                startTransition(() => {
+                  router.refresh();
+                  reset();
+                })
+              }
               className="h-[34px] rounded-lg border border-ink bg-ink px-4 text-[12.5px] font-semibold text-white hover:bg-ink-soft"
             >
               Try again

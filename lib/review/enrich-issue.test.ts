@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { normalizeSuggestion } from "./enrich-issue";
+import { issueLanguage, normalizeSuggestion } from "./enrich-issue";
+
+describe("issueLanguage reads the extension off the file name", () => {
+  it("names an extensionless file in a subdirectory after the file", () => {
+    expect(issueLanguage("docker/Dockerfile")).toBe("Dockerfile");
+  });
+
+  it("survives a dot in a parent directory", () => {
+    expect(issueLanguage("a.b/Dockerfile")).toBe("Dockerfile");
+  });
+
+  it("keeps reading ordinary paths as before", () => {
+    expect(issueLanguage("src/review/index.ts")).toBe("ts");
+    expect(issueLanguage(".gitignore")).toBe("gitignore");
+  });
+
+  it("falls back to text when there is nothing to read", () => {
+    expect(issueLanguage("")).toBe("text");
+  });
+});
 
 describe("normalizeSuggestion unwraps a fenced snippet", () => {
   it("strips a fence with a js info string", () => {
