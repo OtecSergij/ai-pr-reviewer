@@ -5,9 +5,9 @@ import type { FinishReason } from "ai";
 import type { Issue } from "@/lib/review/issue";
 import type {
   OutcomeData,
-  PRFileSummary,
   PRMeta,
   ReviewChunk,
+  ReviewFileSummary,
 } from "@/lib/review/stream";
 import { nextFinishReason } from "@/lib/review/finish-reason";
 import type {
@@ -20,6 +20,7 @@ import {
   isDegenerateText,
   isErrorKind,
   isTextEntry,
+  patchPartOf,
   revealTranscript,
   totalTextChars,
 } from "@/lib/review/transcript";
@@ -81,7 +82,7 @@ export function useReview() {
   const [finishReason, setFinishReason] = useState<FinishReason | null>(null);
   const [outcome, setOutcome] = useState<OutcomeData | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
-  const [files, setFiles] = useState<PRFileSummary[]>([]);
+  const [files, setFiles] = useState<ReviewFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -256,6 +257,9 @@ export function useReview() {
                   } else {
                     entry.outcome = "ok";
                   }
+                  const patchPart = patchPartOf(output);
+                  if (patchPart) entry.patchPart = patchPart;
+                  setToolEntries(toolEntriesRef.current.slice());
                   scheduleCommit();
                 }
                 break;

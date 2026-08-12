@@ -25,6 +25,8 @@ export type TranscriptTextKind = "text" | "reasoning";
 
 export type TranscriptTextEntry = { kind: TranscriptTextKind; text: string };
 
+export type PatchPart = { part: number; totalParts: number };
+
 export type TranscriptEntry =
   | {
       kind: "tool";
@@ -33,6 +35,7 @@ export type TranscriptEntry =
       input: unknown;
       outcome: ToolOutcome;
       note?: string;
+      patchPart?: PatchPart;
     }
   | TranscriptTextEntry
   | ({ kind: "failover" } & FailoverData);
@@ -94,6 +97,56 @@ export function toolPath(entry: TranscriptEntry): ToolPath | null {
     default:
       return null;
   }
+}
+
+export function patchPartOf(output: unknown): PatchPart | null {
+  if (output === null || typeof output !== "object") return null;
+
+  const { part, total_parts: totalParts } = output as Record<string, unknown>;
+
+  return typeof part === "number" && typeof totalParts === "number"
+    ? { part, totalParts }
+    : null;
+}
+
+const PART_LIMIT_STATUS = "part_limit";
+
+export function partiallyReadFiles(entries: TranscriptEntry[]): Set<string> {
+  const read = new Map<string, { parts: Set<number>; totalParts: number }>();
+  const refused = new Set<string>();
+
+  for (const entry of entries) {
+    if (entry.kind !== "tool") continue;
+    if (entry.toolName !== REVIEW_TOOL_NAMES.getDiff) continue;
+
+    const path = toolPath(entry)?.path;
+    if (!path) continue;
+
+    if (!entry.patchPart) {
+      if (entry.note === PART_LIMIT_STATUS) refused.add(path);
+      continue;
+    }
+
+    const seen = read.get(path) ?? {
+      parts: new Set<number>(),
+      totalParts: entry.patchPart.totalParts,
+    };
+    seen.parts.add(entry.patchPart.part);
+    seen.totalParts = entry.patchPart.totalParts;
+    read.set(path, seen);
+  }
+
+  const partial = new Set<string>();
+
+  for (const path of refused) {
+    if (!read.has(path)) partial.add(path);
+  }
+
+  for (const [path, { parts, totalParts }] of read) {
+    if (parts.size < totalParts) partial.add(path);
+  }
+
+  return partial;
 }
 
 export function countSteps(transcript: TranscriptEntry[]): number {

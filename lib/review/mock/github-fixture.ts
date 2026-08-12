@@ -584,7 +584,7 @@ export function createFixtureGithubAccess(pr: PRRef): GithubAccess {
     getFile: async (filename) =>
       CHANGED_FILES.find((f) => f.filename === filename) ?? null,
     getDiff: async (filename) => PATCHES.get(filename) ?? null,
-    getFileContents: async ({ path, ref }) => {
+    getFileContents: async ({ path, ref, maxBytes }) => {
       if (DIRECTORIES.has(path)) {
         throw new GitHubApiError(200, `Expected file at ${path}, got directory`);
       }
@@ -595,11 +595,13 @@ export function createFixtureGithubAccess(pr: PRRef): GithubAccess {
         throw new NotFoundError(`file ${pr.owner}/${pr.repo}@${ref}:${path}`);
       }
 
+      const size = byteSize(content);
+
       return {
         path,
         ref,
-        content,
-        size: byteSize(content),
+        content: size > maxBytes ? null : content,
+        size,
         sha: blobSha(content),
       };
     },

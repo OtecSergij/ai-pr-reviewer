@@ -5,7 +5,9 @@ import type { ProviderName } from "@/lib/ai/provider";
 import type { FailureReason } from "@/lib/review/errors";
 import type { ErrorKind } from "@/lib/review/transcript";
 
-export type { PRFileStatus, PRFileSummary };
+export type { PRFileStatus };
+
+export type ReviewFileSummary = PRFileSummary & { generated: boolean };
 
 export const ISSUE_DATA_KEY = "issue" as const;
 
@@ -37,7 +39,7 @@ export type ReviewUIMessage = UIMessage<
   never,
   {
     meta: PRMeta;
-    files: PRFileSummary[];
+    files: ReviewFileSummary[];
     failover: FailoverData;
     usage: UsageData;
     share: ShareData;

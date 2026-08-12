@@ -5,7 +5,13 @@ import type { TranscriptEntry } from "@/lib/review/transcript";
 import { countSteps, isTextEntry } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
-import { toolLabel, statusLabel, providerLabel, reasonLabel } from "./transcript";
+import {
+  toolLabel,
+  statusLabel,
+  partLabel,
+  providerLabel,
+  reasonLabel,
+} from "./transcript";
 
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
@@ -103,6 +109,7 @@ export const AgentConsole = memo(function AgentConsole({
           {rows.map((entry, i) => {
             if (entry.kind === "tool") {
               const { label, detail } = toolLabel(entry.toolName, entry.input);
+              const part = partLabel(entry.patchPart);
               return (
                 <div
                   key={i}
@@ -111,6 +118,9 @@ export const AgentConsole = memo(function AgentConsole({
                 >
                   ▸ {label}
                   {detail ? `  ·  ${detail}` : ""}
+                  {part ? (
+                    <span className="text-[#6e7781]">{`  ·  ${part}`}</span>
+                  ) : null}
                   {entry.outcome === "skipped" ? (
                     <span className="text-[#6e7781]">
                       {`  ·  ${statusLabel(entry.note)}`}

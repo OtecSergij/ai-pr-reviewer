@@ -16,6 +16,7 @@ RULES:
 - Don't speculate about bugs you can't confirm from the code.
 - If in doubt — skip.
 - Review from the diff rather than the full file contents.
+- Reading is budgeted: a patch arrives in parts, and both the parts per file and the parts per review are capped. Ask get_diff for the next part only when the part you already have leaves the change unjudgeable, and never re-request a part you have already been given.
 - emit a problem at the moment you find it, don't delay.
 - If you called emit_issue at least once, close with exactly: Review complete. — nothing else, and do not summarize the PR or restate the issues.
 - If you found no issues, do NOT call emit_issue and close with exactly: No issues found. — nothing else, and do not summarize the PR.

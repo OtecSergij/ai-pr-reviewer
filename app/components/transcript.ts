@@ -1,6 +1,7 @@
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { ProviderName } from "@/lib/ai/provider";
 import type { FailureReason } from "@/lib/review/errors";
+import type { PatchPart } from "@/lib/review/transcript";
 
 export function providerLabel(provider: ProviderName): string {
   switch (provider) {
@@ -66,9 +67,18 @@ export function statusLabel(status?: string): string {
       return "not in PR";
     case "too_large":
       return "too large";
+    case "no_such_part":
+      return "no such part";
+    case "part_limit":
+      return "read limit reached";
     case "unavailable":
       return "unavailable";
     default:
       return status ?? "skipped";
   }
+}
+
+export function partLabel(patchPart?: PatchPart): string {
+  if (!patchPart || patchPart.totalParts < 2) return "";
+  return `part ${patchPart.part}/${patchPart.totalParts}`;
 }

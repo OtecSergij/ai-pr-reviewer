@@ -39,6 +39,7 @@ export type GithubAccess = {
   getFileContents: (params: {
     path: string;
     ref: string;
+    maxBytes: number;
   }) => Promise<FileContents>;
   listDirectory: (params: {
     path: string;
@@ -71,6 +72,7 @@ export function createGithubAccess(
   let metadataPromise: Promise<PRMetadata> | null = null;
   let filesPromise: Promise<Map<string, PRFile>> | null = null;
   const fileContentsCache = new Map<string, Promise<FileContents>>();
+  const directoryCache = new Map<string, Promise<DirectoryEntry[]>>();
 
   const ensureMetadata = (): Promise<PRMetadata> => {
     if (!metadataPromise) {
@@ -98,7 +100,7 @@ export function createGithubAccess(
     },
     getDiff: async (filename) =>
       (await ensureFiles()).get(filename)?.patch ?? null,
-    getFileContents: ({ path, ref }) => {
+    getFileContents: ({ path, ref, maxBytes }) => {
       const key = `${ref}:${path}`;
       let cached = fileContentsCache.get(key);
       if (!cached) {
@@ -109,6 +111,7 @@ export function createGithubAccess(
               repo: pr.repo,
               path,
               ref,
+              maxBytes,
             }),
           retryOpts
         );
@@ -121,17 +124,29 @@ export function createGithubAccess(
       }
       return cached;
     },
-    listDirectory: ({ path, ref }) =>
-      withRetry(
-        () =>
-          listDirectory(client, {
-            owner: pr.owner,
-            repo: pr.repo,
-            path,
-            ref,
-          }),
-        retryOpts
-      ),
+    listDirectory: ({ path, ref }) => {
+      const key = `${ref}:${path}`;
+      let cached = directoryCache.get(key);
+      if (!cached) {
+        cached = withRetry(
+          () =>
+            listDirectory(client, {
+              owner: pr.owner,
+              repo: pr.repo,
+              path,
+              ref,
+            }),
+          retryOpts
+        );
+        cached.catch(() => {
+          if (directoryCache.get(key) === cached) {
+            directoryCache.delete(key);
+          }
+        });
+        directoryCache.set(key, cached);
+      }
+      return cached;
+    },
   };
 }
 

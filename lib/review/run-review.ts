@@ -9,17 +9,18 @@ import {
 } from "ai";
 
 import { parsePRUrl, type PRRef } from "@/lib/github/parse-url";
-import {
-  createGithubAccess,
-  type GithubAccess,
-  type PRFileSummary,
-} from "@/lib/github/octokit";
+import { createGithubAccess, type GithubAccess } from "@/lib/github/octokit";
 import { createReviewTools } from "@/lib/review/tools/review-tools";
+import { isGeneratedPath } from "@/lib/review/tools/generated-path";
 import { READING_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { HANDOFF_NUDGE, SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
 import { budgetCeiling, estimateInputTokens } from "@/lib/review/budget";
-import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
+import {
+  MAX_CHANGED_FILES,
+  MAX_STEPS,
+  RAW_CHANGED_FILES_CEILING,
+} from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
 import {
@@ -40,7 +41,7 @@ import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
 import { saveReview } from "@/lib/db/reviews";
 import { logger } from "@/lib/log";
 import type { ErrorKind } from "@/lib/review/transcript";
-import { ReviewUIMessage } from "./stream";
+import { ReviewUIMessage, type ReviewFileSummary } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
 const offlineGithub = env.MOCK_REVIEW && env.MOCK_OFFLINE;
@@ -70,7 +71,7 @@ export async function runReview({
     headSha: string,
     title: string,
     isPrivate: boolean,
-    prFiles: PRFileSummary[];
+    prFiles: ReviewFileSummary[];
 
   try {
     pr = parsePRUrl(prUrl);
@@ -117,7 +118,7 @@ export async function runReview({
       );
     }
 
-    if (prMetadata.changedFiles > MAX_CHANGED_FILES) {
+    if (prMetadata.changedFiles > RAW_CHANGED_FILES_CEILING) {
       log.info(
         {
           owner: pr.owner,
@@ -127,19 +128,36 @@ export async function runReview({
         },
         "review rejected: too many changed files"
       );
-      return new Response(
-        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer.`,
-        {
-          status: 400,
-          headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
-        }
+      return tooManyFilesResponse(
+        `This PR is too large to inspect: it changes over ${RAW_CHANGED_FILES_CEILING} files.`
       );
     }
 
     headSha = prMetadata.headSha;
     title = prMetadata.title;
     isPrivate = prMetadata.isPrivate;
-    prFiles = await gh.getPRFiles();
+    prFiles = (await gh.getPRFiles()).map((f) => ({
+      ...f,
+      generated: isGeneratedPath(f.filename),
+    }));
+
+    const reviewableFiles = prFiles.filter((f) => !f.generated).length;
+
+    if (reviewableFiles > MAX_CHANGED_FILES) {
+      log.info(
+        {
+          owner: pr.owner,
+          repo: pr.repo,
+          prNumber: pr.prNumber,
+          changedFiles: prMetadata.changedFiles,
+          reviewableFiles,
+        },
+        "review rejected: too many reviewable files"
+      );
+      return tooManyFilesResponse(
+        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer, not counting generated ones.`
+      );
+    }
   } catch (e) {
     const res = errorToResponse(e);
     if (res) {
@@ -516,6 +534,13 @@ export async function runReview({
   });
 
   return createUIMessageStreamResponse({ stream });
+}
+
+function tooManyFilesResponse(message: string): Response {
+  return new Response(message, {
+    status: 400,
+    headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
+  });
 }
 
 function githubCredential(githubPat?: string): string {

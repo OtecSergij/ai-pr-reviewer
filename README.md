@@ -22,9 +22,9 @@ An AI agent that reviews GitHub pull requests: it walks the repository, reads th
 
 ## Known limits
 
-- PRs with more than 15 changed files are rejected up front.
+- PRs with more than 15 reviewable changed files are rejected up front; generated files (build output, lockfiles, minified bundles) do not count against that limit.
 - Reviews are rate-limited per IP; the budgets live in `lib/rate-limit.ts`.
-- Oversized inputs are cut honestly rather than silently: large patches are truncated at a hunk boundary, oversized files are refused, and the model is told about both. Files that look machine-generated (build output, lockfiles, minified bundles) are flagged so the agent skips them.
+- Oversized inputs are paginated or refused honestly rather than cut silently: a large patch is served in parts split at hunk boundaries, and the agent asks for the next part when it needs one — with a budget per file and per review, so a file read only in part is marked as such in the sidebar. Oversized files are refused with a pointer back to the diff. Files that look machine-generated (build output, lockfiles, minified bundles) are flagged so the agent skips them.
 - A run that exhausts a free model's output limit is handed to the next provider in the chain; if the last one is also cut short, the review ends as "Review cut short" and is not saved — only reviews that ran to completion get a share link. Bringing your own Anthropic key usually covers more.
 - The agent runs under a hard step ceiling to bound cost and latency.
 
