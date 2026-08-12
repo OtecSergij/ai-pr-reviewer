@@ -22,10 +22,12 @@ import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
 import {
   classifyFailure,
+  errorKindForReason,
   errorToMessage,
   errorToResponse,
-  pickVerdict,
-  CUT_SHORT_VERDICT,
+  shownVerdict,
+  OUTPUT_TRUNCATED_VERDICT,
+  STEPS_EXHAUSTED_VERDICT,
   type FailureVerdict,
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
@@ -68,6 +70,15 @@ export async function runReview({
 
   try {
     pr = parsePRUrl(prUrl);
+
+    const gate = await reviewLimiter.check(ip);
+    if (!gate.allowed) {
+      log.info(
+        { retryAfterMs: gate.retryAfterMs },
+        "review rejected: rate limited"
+      );
+      return rateLimitResponse(gate);
+    }
 
     gh = offlineGithub
       ? createFixtureGithubAccess(pr)
@@ -135,12 +146,6 @@ export async function runReview({
 
   if (signal.aborted) {
     return new Response(null, { status: 499 });
-  }
-
-  const gate = await reviewLimiter.check(ip);
-  if (!gate.allowed) {
-    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
-    return rateLimitResponse(gate);
   }
 
   const UIIssues = new Map<string, Issue>();
@@ -256,11 +261,16 @@ export async function runReview({
           const incomplete = finishReason === null || cutShort;
 
           if (cutShort && i < candidates.length - 1) {
+            const cut =
+              finishReason === "length"
+                ? OUTPUT_TRUNCATED_VERDICT
+                : STEPS_EXHAUSTED_VERDICT;
+
             log.warn(
               {
                 from: candidates[i].provider,
                 to: candidates[i + 1].provider,
-                reason: "too-large",
+                reason: cut.reason,
                 finishReason,
                 steps,
               },
@@ -273,11 +283,15 @@ export async function runReview({
               data: {
                 from: candidates[i].provider,
                 to: candidates[i + 1].provider,
-                reason: "too-large",
+                reason: cut.reason,
               },
             });
 
-            verdicts.push(CUT_SHORT_VERDICT);
+            verdicts.push({
+              ...cut,
+              provider: candidates[i].provider,
+              modelId: candidates[i].modelId,
+            });
             streamMessages.push(...sanitizeForHandoff(stepMessages));
             continue;
           }
@@ -351,9 +365,13 @@ export async function runReview({
           return;
         }
 
-        const knownError = classifyFailure(failure, {
-          userKey: candidates[i].usesUserKey,
-        });
+        const knownError: FailureVerdict = {
+          ...classifyFailure(failure, {
+            userKey: candidates[i].usesUserKey,
+          }),
+          provider: candidates[i].provider,
+          modelId: candidates[i].modelId,
+        };
 
         if (knownError.reason === "aborted" && signal.aborted) {
           return;
@@ -368,6 +386,7 @@ export async function runReview({
               from: candidates[i].provider,
               to: candidates[i + 1].provider,
               reason: knownError.reason,
+              retryAfterSec: knownError.retryAfterSec ?? null,
             },
             "provider failover"
           );
@@ -386,23 +405,38 @@ export async function runReview({
           continue;
         }
 
-        const shown = knownError.hop ? pickVerdict(verdicts) : knownError;
+        const shown = knownError.hop ? shownVerdict(verdicts) : knownError;
 
         log.error(
           {
             err: failure,
             reason: knownError.reason,
             shownReason: shown.reason,
+            shownProvider: shown.provider ?? null,
             provider: candidates[i].modelId,
+            retryAfterSec: shown.retryAfterSec ?? null,
+            attempts: verdicts.map((verdict) => ({
+              provider: verdict.provider ?? null,
+              modelId: verdict.modelId ?? null,
+              reason: verdict.reason,
+            })),
           },
           "review failed after providers exhausted"
         );
 
+        writer.write({
+          type: "data-errorKind",
+          transient: true,
+          data: { kind: errorKindForReason(shown.reason) },
+        });
         writer.write({ type: "error", errorText: shown.message });
         return;
       }
     },
-    onError: errorToMessage,
+    onError: (error) => {
+      log.error({ err: error }, "review stream failed");
+      return errorToMessage(error);
+    },
   });
 
   return createUIMessageStreamResponse({ stream });

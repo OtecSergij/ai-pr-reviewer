@@ -20,7 +20,7 @@ const meta: ReviewChunk = {
 const failover: ReviewChunk = {
   type: "data-failover",
   transient: true,
-  data: { from: "groq", to: "cerebras", reason: "too-large" },
+  data: { from: "groq", to: "cerebras", reason: "output-truncated" },
 };
 
 const finish = (finishReason: FinishReason): ReviewChunk => ({

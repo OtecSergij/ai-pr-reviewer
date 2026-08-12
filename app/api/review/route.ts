@@ -5,6 +5,9 @@ import {
   rateLimitResponse,
   requestLimiter,
 } from "@/lib/rate-limit";
+import { errorToMessage } from "@/lib/review/errors";
+import type { ErrorKind } from "@/lib/review/transcript";
+import { validRequestId } from "@/lib/request-id";
 import { logger } from "@/lib/log";
 
 const requestSchema = z.object({
@@ -13,14 +16,9 @@ const requestSchema = z.object({
   githubPat: z.string().min(1).max(255).optional(),
 });
 
-const REQUEST_ID_PATTERN = /^[\w-]{1,64}$/;
-
 export async function POST(req: Request) {
-  const incomingRequestId = req.headers.get("x-request-id");
   const requestId =
-    incomingRequestId && REQUEST_ID_PATTERN.test(incomingRequestId)
-      ? incomingRequestId
-      : crypto.randomUUID();
+    validRequestId(req.headers.get("x-request-id")) ?? crypto.randomUUID();
   const log = logger.child({ requestId });
 
   const ip = getClientIp(req);
@@ -38,7 +36,10 @@ export async function POST(req: Request) {
     log.warn({ contentType }, "rejected: unsupported content type");
     return new Response("Unsupported content type: send application/json.", {
       status: 415,
-      headers: { "x-request-id": requestId },
+      headers: {
+        "x-request-id": requestId,
+        "x-review-error": "load" satisfies ErrorKind,
+      },
     });
   }
 
@@ -49,7 +50,13 @@ export async function POST(req: Request) {
     log.warn("rejected: invalid request body");
     return new Response(
       "Invalid request body: expected { prUrl: string, anthropicKey?: string, githubPat?: string }",
-      { status: 400, headers: { "x-request-id": requestId } }
+      {
+        status: 400,
+        headers: {
+          "x-request-id": requestId,
+          "x-review-error": "load" satisfies ErrorKind,
+        },
+      }
     );
   }
 
@@ -63,14 +70,25 @@ export async function POST(req: Request) {
     "review requested"
   );
 
-  const res = await runReview({
-    prUrl: parsed.data.prUrl,
-    signal: req.signal,
-    anthropicKey: parsed.data.anthropicKey,
-    githubPat: parsed.data.githubPat,
-    ip,
-    requestId,
-  });
-  res.headers.set("x-request-id", requestId);
-  return res;
+  try {
+    const res = await runReview({
+      prUrl: parsed.data.prUrl,
+      signal: req.signal,
+      anthropicKey: parsed.data.anthropicKey,
+      githubPat: parsed.data.githubPat,
+      ip,
+      requestId,
+    });
+    res.headers.set("x-request-id", requestId);
+    return res;
+  } catch (e) {
+    log.error({ err: e }, "review request failed before the stream");
+    return new Response(errorToMessage(e), {
+      status: 500,
+      headers: {
+        "x-request-id": requestId,
+        "x-review-error": "review" satisfies ErrorKind,
+      },
+    });
+  }
 }

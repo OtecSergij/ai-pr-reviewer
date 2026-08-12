@@ -1,4 +1,5 @@
 import { type Instrumentation } from "next";
+import { validRequestId } from "@/lib/request-id";
 
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
@@ -21,7 +22,7 @@ export const onRequestError: Instrumentation.onRequestError = async (
     {
       err: error,
       digest,
-      requestId: request.headers["x-request-id"],
+      requestId: validRequestId(request.headers["x-request-id"]),
       path: request.path,
       method: request.method,
       routeType: context.routeType,

@@ -2,6 +2,7 @@ import "server-only";
 import { redis, ensureRedisConnection } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/log";
+import type { ErrorKind } from "@/lib/review/transcript";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -149,7 +150,10 @@ export function rateLimitResponse(
 ): Response {
   return new Response(`Try again in ~${formatWait(gate.retryAfterMs)}.`, {
     status: 429,
-    headers: { "retry-after": String(Math.ceil(gate.retryAfterMs / 1000)) },
+    headers: {
+      "retry-after": String(Math.ceil(gate.retryAfterMs / 1000)),
+      "x-review-error": "rate-limit" satisfies ErrorKind,
+    },
   });
 }
 

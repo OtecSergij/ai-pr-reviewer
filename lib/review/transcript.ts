@@ -5,7 +5,9 @@ export type ReviewStatus = "idle" | "running" | "done" | "error" | "aborted";
 
 const ERROR_KINDS = [
   "load",
+  "github",
   "rate-limit",
+  "provider-quota",
   "review",
   "private",
   "too-many-files",

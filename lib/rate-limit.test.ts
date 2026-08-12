@@ -178,6 +178,15 @@ describe("rateLimitResponse in hours", () => {
   });
 });
 
+describe("rateLimitResponse names the card it wants", () => {
+  it("labels our own refusal as a rate limit, not as a failed review", async () => {
+    const { rateLimitResponse } = await loadRateLimit(undefined);
+    const response = rateLimitResponse({ allowed: false, retryAfterMs: 1_000 });
+
+    expect(response.headers.get("x-review-error")).toBe("rate-limit");
+  });
+});
+
 describe("rateLimitResponse keeps internals out of the body", () => {
   it("says only how long to wait", async () => {
     const { rateLimitResponse } = await loadRateLimit(undefined);

@@ -3,6 +3,7 @@ import type { Issue } from "./issue";
 import type { PRFileStatus, PRFileSummary } from "@/lib/github/octokit";
 import type { ProviderName } from "@/lib/ai/provider";
 import type { FailureReason } from "@/lib/review/errors";
+import type { ErrorKind } from "@/lib/review/transcript";
 
 export type { PRFileStatus, PRFileSummary };
 
@@ -19,6 +20,8 @@ export type UsageData = { tokens: number };
 export type ShareData = { slug: string };
 
 export type OutcomeData = { incomplete: boolean; saveFailed: boolean };
+
+export type ErrorKindData = { kind: ErrorKind };
 
 export type PRMeta = {
   owner: string;
@@ -39,6 +42,7 @@ export type ReviewUIMessage = UIMessage<
     usage: UsageData;
     share: ShareData;
     outcome: OutcomeData;
+    errorKind: ErrorKindData;
   } & {
     [K in typeof ISSUE_DATA_KEY]: Issue;
   }

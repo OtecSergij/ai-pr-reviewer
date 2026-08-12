@@ -60,6 +60,10 @@ function errorKindFromResponse(res: Response): ErrorKind {
   return "load";
 }
 
+function newRequestId(): string | null {
+  return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : null;
+}
+
 export function useReview() {
   const [status, setStatus] = useState<ReviewStatus>("idle");
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -146,10 +150,16 @@ export function useReview() {
       const ac = new AbortController();
       abortRef.current = ac;
 
+      const sentRequestId = newRequestId();
+      setRequestId(sentRequestId);
+
       try {
         const res = await fetch("/api/review", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(sentRequestId ? { "x-request-id": sentRequestId } : {}),
+          },
           body: JSON.stringify({
             prUrl,
             anthropicKey: options.anthropicKey,
@@ -158,7 +168,7 @@ export function useReview() {
           signal: ac.signal,
         });
 
-        setRequestId(res.headers.get("x-request-id"));
+        setRequestId(res.headers.get("x-request-id") ?? sentRequestId);
 
         if (!res.ok || !res.body) {
           const text = (await res.text().catch(() => "")).trim();
@@ -172,6 +182,7 @@ export function useReview() {
         const decoder = new TextDecoder();
         let buffer = "";
         let streamError: string | null = null;
+        let streamErrorKind: ErrorKind | null = null;
         const openBlocks = new Map<string, number>();
 
         while (true) {
@@ -276,6 +287,10 @@ export function useReview() {
                 setOutcome(chunk.data);
                 break;
 
+              case "data-errorKind":
+                streamErrorKind = chunk.data.kind;
+                break;
+
               case "text-start":
                 entries.push({ kind: "text", text: "" });
                 openBlocks.set(`text:${chunk.id}`, entries.length - 1);
@@ -355,7 +370,7 @@ export function useReview() {
 
         if (streamError) {
           setError(streamError);
-          setErrorKind("review");
+          setErrorKind(streamErrorKind ?? "review");
           setStatus("error");
         } else {
           setStatus("done");

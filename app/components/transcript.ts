@@ -15,21 +15,22 @@ export function providerLabel(provider: ProviderName): string {
   }
 }
 
+const REASON_LABELS: Record<FailureReason, string> = {
+  "rate-limit": "hit rate limits",
+  "provider-limit": "hit its token budget",
+  overloaded: "is overloaded",
+  server: "had a server error",
+  "context-overflow": "ran out of context",
+  "output-truncated": "hit its output limit",
+  "steps-exhausted": "hit the step ceiling",
+  unavailable: "is unavailable",
+  auth: "failed",
+  aborted: "failed",
+  unknown: "failed",
+};
+
 export function reasonLabel(reason: FailureReason): string {
-  switch (reason) {
-    case "rate-limit":
-      return "hit rate limits";
-    case "overloaded":
-      return "is overloaded";
-    case "server":
-      return "had a server error";
-    case "too-large":
-      return "ran out of context";
-    case "unavailable":
-      return "is unavailable";
-    default:
-      return "failed";
-  }
+  return REASON_LABELS[reason];
 }
 
 export function toolLabel(
