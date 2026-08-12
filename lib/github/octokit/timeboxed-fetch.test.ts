@@ -18,7 +18,9 @@ function stubFetch(impl: typeof fetch): void {
 function hangs(): typeof fetch {
   return (_input, init) =>
     new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      init?.signal?.addEventListener("abort", () =>
+        reject(init.signal?.reason),
+      );
     });
 }
 
@@ -37,7 +39,7 @@ function slowBody(chunkDelayMs: number): typeof fetch {
           }, chunkDelayMs);
         },
       }),
-      { status: 200, headers: { "content-type": "application/json" } }
+      { status: 200, headers: { "content-type": "application/json" } },
     );
 }
 
@@ -46,7 +48,7 @@ describe("timeboxedFetch before the headers arrive", () => {
     stubFetch(hangs());
 
     await expect(timeboxedFetch(20)(URL_UNDER_TEST)).rejects.toSatisfy(
-      (e) => e instanceof DOMException && e.name === "TimeoutError"
+      (e) => e instanceof DOMException && e.name === "TimeoutError",
     );
   });
 
@@ -60,7 +62,7 @@ describe("timeboxedFetch before the headers arrive", () => {
     user.abort();
 
     await expect(pending).rejects.toSatisfy(
-      (e) => e instanceof DOMException && e.name === "AbortError"
+      (e) => e instanceof DOMException && e.name === "AbortError",
     );
   });
 });
@@ -83,7 +85,7 @@ describe("timeboxedFetch once the headers arrive", () => {
     user.abort();
 
     await expect(response.text()).rejects.toSatisfy(
-      (e) => e instanceof DOMException && e.name === "AbortError"
+      (e) => e instanceof DOMException && e.name === "AbortError",
     );
   });
 });
@@ -101,7 +103,7 @@ describe("a timed-out GitHub call end to end", () => {
       expect.unreachable();
     } catch (err) {
       expect(() => translateOctokitError(err, "PR o/r#1")).toThrow(
-        GitHubTimeoutError
+        GitHubTimeoutError,
       );
     }
   });

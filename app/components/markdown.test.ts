@@ -14,7 +14,9 @@ describe("Markdown keeps the classes rehype puts on a node", () => {
     const html = block("Claim.[^1]\n\n[^1]: Source.");
 
     expect(html).toContain('id="footnote-label"');
-    expect(html).toMatch(/<h5[^>]*class="[^"]*sr-only[^"]*"[^>]*>Footnotes<\/h5>/);
+    expect(html).toMatch(
+      /<h5[^>]*class="[^"]*sr-only[^"]*"[^>]*>Footnotes<\/h5>/,
+    );
   });
 
   it("still styles a heading that carries no class of its own", () => {
@@ -59,7 +61,7 @@ describe("MarkdownInline emits no block-level elements", () => {
 
   it("leaves a decimal that starts a title alone", () => {
     expect(inline("1.5x slower on every request")).toBe(
-      "1.5x slower on every request"
+      "1.5x slower on every request",
     );
   });
 

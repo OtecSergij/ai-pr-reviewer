@@ -21,7 +21,7 @@ vi.mock("@/lib/log", () => {
     logRecords.push(
       typeof data === "string"
         ? { data: {}, msg: data }
-        : { data: (data ?? {}) as Record<string, unknown>, msg: msg ?? "" }
+        : { data: (data ?? {}) as Record<string, unknown>, msg: msg ?? "" },
     );
   };
 
@@ -39,7 +39,7 @@ vi.mock("@/lib/log", () => {
 });
 
 const loadRateLimit = async (
-  trustProxy: string | undefined
+  trustProxy: string | undefined,
 ): Promise<RateLimitModule> => {
   vi.stubEnv("MOCK_REVIEW", "1");
   vi.stubEnv("TRUST_PROXY", trustProxy);
@@ -54,7 +54,7 @@ const forwardedFor = (value?: string): Request =>
 
 const refusal = async (
   rateLimitResponse: RateLimitModule["rateLimitResponse"],
-  retryAfterMs: number
+  retryAfterMs: number,
 ): Promise<{ status: number; retryAfter: string | null; body: string }> => {
   const response = rateLimitResponse({ allowed: false, retryAfterMs });
   return {
@@ -244,8 +244,7 @@ const CLIENT = "198.51.100.9";
 const NOW = 1_700_000_000_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const TIER_ARGV: Record<string, [string, string]> = {
   hour: [String(HOUR_MS), "8"],
@@ -261,7 +260,7 @@ const evalCall = (index = 0): { keys: string[]; arguments: string[] } =>
 const checkAndConsume = (
   store: Map<string, SortedSetEntry[]>,
   keys: string[],
-  argv: string[]
+  argv: string[],
 ): [number, number, number] => {
   const now = Number(argv[0]);
   let blocked = 0;
@@ -271,7 +270,7 @@ const checkAndConsume = (
     const window = Number(argv[2 * i]);
     const limit = Number(argv[2 * i + 1]);
     const kept = (store.get(keys[i - 1]) ?? []).filter(
-      (entry) => entry.score > now - window
+      (entry) => entry.score > now - window,
     );
     store.set(keys[i - 1], kept);
 
@@ -465,8 +464,10 @@ describe("the review limiter against a sorted set that behaves like Redis", () =
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     redisMock.eval.mockImplementation(
-      async (_script: string, options: { keys: string[]; arguments: string[] }) =>
-        checkAndConsume(store, options.keys, options.arguments)
+      async (
+        _script: string,
+        options: { keys: string[]; arguments: string[] },
+      ) => checkAndConsume(store, options.keys, options.arguments),
     );
   });
 

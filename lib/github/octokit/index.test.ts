@@ -4,13 +4,12 @@ import type { DirectoryEntry } from "./list-directory";
 import type { FileContents } from "./get-file-contents";
 import type { PRMetadata } from "./get-pr-metadata";
 
-const { listDirectoryMock, getFileContentsMock, getPRMetadataMock } = vi.hoisted(
-  () => ({
+const { listDirectoryMock, getFileContentsMock, getPRMetadataMock } =
+  vi.hoisted(() => ({
     listDirectoryMock: vi.fn(),
     getFileContentsMock: vi.fn(),
     getPRMetadataMock: vi.fn(),
-  })
-);
+  }));
 
 vi.mock("./list-directory", () => ({ listDirectory: listDirectoryMock }));
 vi.mock("./get-file-contents", () => ({
@@ -61,7 +60,7 @@ describe("createGithubAccess caches directory listings", () => {
 
   it("calls GitHub once per ref and path", async () => {
     listDirectoryMock.mockImplementation(async ({ path }: { path: string }) =>
-      entries(path)
+      entries(path),
     );
 
     const gh = createGithubAccess(null, PR);
@@ -83,11 +82,11 @@ describe("createGithubAccess caches directory listings", () => {
     const gh = createGithubAccess(null, PR);
 
     await expect(
-      gh.listDirectory({ path: "src", ref: REF })
+      gh.listDirectory({ path: "src", ref: REF }),
     ).rejects.toBeInstanceOf(NotFoundError);
-    await expect(
-      gh.listDirectory({ path: "src", ref: REF })
-    ).resolves.toEqual(entries("src"));
+    await expect(gh.listDirectory({ path: "src", ref: REF })).resolves.toEqual(
+      entries("src"),
+    );
 
     expect(listDirectoryMock).toHaveBeenCalledTimes(2);
   });
@@ -141,7 +140,11 @@ describe("createGithubAccess retries what GitHub may answer again", () => {
     getPRMetadataMock.mockRejectedValue(serverError());
     const controller = new AbortController();
 
-    const pending = createGithubAccess(null, PR, controller.signal).getPRMetadata();
+    const pending = createGithubAccess(
+      null,
+      PR,
+      controller.signal,
+    ).getPRMetadata();
     const settled = expect(pending).rejects.toBeInstanceOf(GitHubApiError);
     controller.abort();
     await vi.advanceTimersByTimeAsync(10_000);

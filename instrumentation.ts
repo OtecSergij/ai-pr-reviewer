@@ -10,7 +10,7 @@ export async function register(): Promise<void> {
 export const onRequestError: Instrumentation.onRequestError = async (
   error,
   request,
-  context
+  context,
 ) => {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const digest =
@@ -27,6 +27,6 @@ export const onRequestError: Instrumentation.onRequestError = async (
       method: request.method,
       routeType: context.routeType,
     },
-    "unhandled request error"
+    "unhandled request error",
   );
 };

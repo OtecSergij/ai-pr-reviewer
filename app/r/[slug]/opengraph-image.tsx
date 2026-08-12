@@ -28,6 +28,6 @@ export default async function Image({
 
   return new ImageResponse(
     review ? <SeverityCard review={review} /> : <BrandCard />,
-    { ...size, fonts }
+    { ...size, fonts },
   );
 }

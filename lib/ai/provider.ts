@@ -27,7 +27,7 @@ export type ModelCandidate = {
 
 export function selectModels(
   anthropicKey: string | undefined,
-  log: Logger
+  log: Logger,
 ): ModelCandidate[] {
   const candidates = anthropicKey
     ? userKeyChain(anthropicKey, log)
@@ -38,7 +38,7 @@ export function selectModels(
       byo: Boolean(anthropicKey),
       modelIds: candidates.map((candidate) => candidate.modelId),
     },
-    "model chain resolved"
+    "model chain resolved",
   );
 
   return candidates;

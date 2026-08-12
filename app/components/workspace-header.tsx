@@ -21,7 +21,7 @@ type WorkspaceHeaderProps = {
 function statusBadge(
   status: WorkspacePhase,
   elapsed: number,
-  truncated: boolean
+  truncated: boolean,
 ) {
   if (status === "done" && truncated) {
     return {

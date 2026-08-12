@@ -47,7 +47,7 @@ export const AgentConsole = memo(function AgentConsole({
   const stick = useRef(true);
 
   const rows = transcript.flatMap((entry, index) =>
-    isConsoleEntry(entry) ? [{ entry, index }] : []
+    isConsoleEntry(entry) ? [{ entry, index }] : [],
   );
   const toolCalls = countToolCalls(transcript);
   const lastTextRow = rows.findLastIndex(({ entry }) => isTextEntry(entry));
@@ -79,7 +79,7 @@ export const AgentConsole = memo(function AgentConsole({
           {trace ? "Agent trace" : current ? current.label : "Starting review…"}
         </h2>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#6e7781]">
-          {trace ? "" : current?.detail ?? ""}
+          {trace ? "" : (current?.detail ?? "")}
         </span>
         <span className="shrink-0 font-mono text-[10.5px] text-subtle">
           {trace ? `${toolCalls} tool calls` : `call ${toolCalls}`}

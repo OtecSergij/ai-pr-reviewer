@@ -23,7 +23,7 @@ describe("issueLanguage reads the extension off the file name", () => {
 describe("normalizeSuggestion unwraps a fenced snippet", () => {
   it("strips a fence with a js info string", () => {
     expect(
-      normalizeSuggestion("```js\nif (!match) {\n  throw new Error();\n}\n```")
+      normalizeSuggestion("```js\nif (!match) {\n  throw new Error();\n}\n```"),
     ).toBe("if (!match) {\n  throw new Error();\n}");
   });
 
@@ -33,7 +33,7 @@ describe("normalizeSuggestion unwraps a fenced snippet", () => {
 
   it("strips a fence surrounded by whitespace and a trailing newline", () => {
     expect(normalizeSuggestion("\n```ts\nconst a: number = 1;\n```\n\n")).toBe(
-      "const a: number = 1;"
+      "const a: number = 1;",
     );
   });
 
@@ -47,7 +47,7 @@ describe("normalizeSuggestion unwraps a fenced snippet", () => {
 
   it("accepts a closing fence longer than the opening one", () => {
     expect(normalizeSuggestion("```js\nconst a = 1;\n`````")).toBe(
-      "const a = 1;"
+      "const a = 1;",
     );
   });
 
@@ -59,7 +59,7 @@ describe("normalizeSuggestion unwraps a fenced snippet", () => {
 
   it("keeps an inner fence when the outer fence is longer", () => {
     expect(normalizeSuggestion("````md\n```js\nconst a = 1;\n```\n````")).toBe(
-      "```js\nconst a = 1;\n```"
+      "```js\nconst a = 1;\n```",
     );
   });
 });
@@ -99,25 +99,25 @@ describe("normalizeSuggestion leaves unfenced text alone", () => {
 describe("normalizeSuggestion normalizes escapes before unwrapping", () => {
   it("unwraps a fence that appears only after escaped newlines are decoded", () => {
     expect(normalizeSuggestion("```js\\nconst a = 1;\\n```")).toBe(
-      "const a = 1;"
+      "const a = 1;",
     );
   });
 
   it("decodes escaped tabs inside the unwrapped snippet", () => {
-    expect(normalizeSuggestion("```js\\nif (a) {\\n\\treturn a;\\n}\\n```")).toBe(
-      "if (a) {\n  return a;\n}"
-    );
+    expect(
+      normalizeSuggestion("```js\\nif (a) {\\n\\treturn a;\\n}\\n```"),
+    ).toBe("if (a) {\n  return a;\n}");
   });
 
   it("decodes escaped carriage returns before unwrapping", () => {
     expect(normalizeSuggestion("```js\\r\\nconst a = 1;\\r\\n```")).toBe(
-      "const a = 1;"
+      "const a = 1;",
     );
   });
 
   it("still normalizes escapes in prose it leaves unchanged", () => {
-    expect(normalizeSuggestion("Rename the flag.\\nThen update the docs.")).toBe(
-      "Rename the flag.\nThen update the docs."
-    );
+    expect(
+      normalizeSuggestion("Rename the flag.\\nThen update the docs."),
+    ).toBe("Rename the flag.\nThen update the docs.");
   });
 });

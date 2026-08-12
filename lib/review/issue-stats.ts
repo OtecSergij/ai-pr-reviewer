@@ -1,7 +1,7 @@
 import type { Issue } from "@/lib/review/issue";
 
 export function countBySeverity(
-  issues: Issue[]
+  issues: Issue[],
 ): Map<Issue["severity"], number> {
   const counts = new Map<Issue["severity"], number>();
   for (const issue of issues) {

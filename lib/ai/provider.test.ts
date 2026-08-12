@@ -90,7 +90,9 @@ describe.each(chains)("$name chain ordering", ({ key }) => {
     const last = chain[chain.length - 1];
 
     for (const candidate of chain.slice(0, -1)) {
-      expect(last.contextWindow).toBeGreaterThanOrEqual(candidate.contextWindow);
+      expect(last.contextWindow).toBeGreaterThanOrEqual(
+        candidate.contextWindow,
+      );
       expect(last.tpmBudget).toBeGreaterThanOrEqual(candidate.tpmBudget);
     }
   });

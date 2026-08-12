@@ -43,14 +43,14 @@ export type ReviewRunOptions = {
 function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
   return entries.find(
     (e): e is Extract<TranscriptEntry, { kind: "tool" }> =>
-      e.kind === "tool" && e.toolCallId === toolCallId
+      e.kind === "tool" && e.toolCallId === toolCallId,
   );
 }
 
 function appendDelta(
   entries: TranscriptEntry[],
   kind: TranscriptTextKind,
-  delta: string
+  delta: string,
 ): void {
   const last = entries[entries.length - 1];
   if (last && isTextEntry(last) && last.kind === kind) {
@@ -109,7 +109,7 @@ export function useReview() {
           : now - lastFrameAtRef.current;
       const step = Math.max(
         1,
-        Math.round((REVEAL_CHARS_PER_SECOND * dt) / 1000)
+        Math.round((REVEAL_CHARS_PER_SECOND * dt) / 1000),
       );
       const revealed = Math.min(total, revealedRef.current + step);
       revealedRef.current = revealed;
@@ -252,7 +252,7 @@ export function useReview() {
                   ) {
                     entry.outcome = "skipped";
                     entry.note = String(
-                      (output as Record<string, unknown>).status
+                      (output as Record<string, unknown>).status,
                     );
                   } else {
                     entry.outcome = "ok";
@@ -405,7 +405,7 @@ export function useReview() {
         flushTranscript();
       }
     },
-    [clearReviewState, flushTranscript, scheduleCommit]
+    [clearReviewState, flushTranscript, scheduleCommit],
   );
 
   const stop = useCallback(() => {
@@ -426,7 +426,7 @@ export function useReview() {
       const since = lastNetworkAtRef.current;
       const idleMs = since === null ? 0 : Date.now() - since;
       setStallLevel(
-        idleMs >= STALL_ESCALATION_MS ? 2 : idleMs >= STALL_NOTICE_MS ? 1 : 0
+        idleMs >= STALL_ESCALATION_MS ? 2 : idleMs >= STALL_NOTICE_MS ? 1 : 0,
       );
     }, STALL_TICK_MS);
 
@@ -438,7 +438,7 @@ export function useReview() {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       abortRef.current?.abort();
     },
-    []
+    [],
   );
 
   return {

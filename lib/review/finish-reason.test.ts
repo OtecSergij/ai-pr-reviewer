@@ -37,14 +37,14 @@ const usage: ReviewChunk = {
 function replay(chunks: ReviewChunk[]): FinishReason | null {
   return chunks.reduce<FinishReason | null>(
     (current, chunk) => nextFinishReason(current, chunk),
-    null
+    null,
   );
 }
 
 describe("nextFinishReason", () => {
   it("lets a candidate that finishes cleanly overwrite an earlier cut-short one", () => {
     expect(
-      replay([meta, finish("length"), failover, meta, finish("stop")])
+      replay([meta, finish("length"), failover, meta, finish("stop")]),
     ).toBe("stop");
   });
 

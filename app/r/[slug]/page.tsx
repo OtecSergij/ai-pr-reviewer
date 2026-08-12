@@ -7,7 +7,7 @@ import { IssueCard } from "@/app/components/issue-card";
 import { SEVERITY_STYLES, severityPills } from "@/app/components/review-theme";
 
 const loadReview = cache(async (slug: string) =>
-  isReviewSlug(slug) ? getReview(slug) : null
+  isReviewSlug(slug) ? getReview(slug) : null,
 );
 
 type Props = { params: Promise<{ slug: string }> };

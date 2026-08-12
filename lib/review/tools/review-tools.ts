@@ -43,7 +43,7 @@ async function runTool<T>(
   log: Logger,
   toolName: ReviewToolName,
   input: unknown,
-  execute: () => Promise<T>
+  execute: () => Promise<T>,
 ): Promise<T> {
   const startedAt = Date.now();
   log.info({ tool: toolName, input }, "tool started");
@@ -56,7 +56,7 @@ async function runTool<T>(
         durationMs: Date.now() - startedAt,
         outcome: outcomeOf(output),
       },
-      "tool finished"
+      "tool finished",
     );
     return output;
   } catch (e) {
@@ -67,7 +67,7 @@ async function runTool<T>(
         durationMs: Date.now() - startedAt,
         outcome: "threw",
       },
-      "tool finished"
+      "tool finished",
     );
     throw e;
   }
@@ -78,7 +78,7 @@ export function createReviewTools(
   UIIssues: Map<string, Issue>,
   repo: RepoContext,
   writer: UIMessageStreamWriter<ReviewUIMessage>,
-  log: Logger
+  log: Logger,
 ) {
   const partRequests = new Map<string, number>();
   const partsPaid = new Set<string>();
@@ -87,7 +87,7 @@ export function createReviewTools(
   const servePatchPart = (
     filename: string,
     parts: string[],
-    part: number
+    part: number,
   ): PatchPartResult => {
     const key = `${filename}#${part}`;
     const requests = partRequests.get(key) ?? 0;
@@ -200,7 +200,7 @@ previous_filename: old file name, if it was renamed.`,
                   generated: isGeneratedPath(f.filename),
                   previous_filename: f.previousFilename,
                 };
-              })
+              }),
             ),
           };
         }),
@@ -236,7 +236,7 @@ part_limit – you asked for a part you are not allowed to read; scope says whic
           return servePatchPart(
             input.filename,
             splitPatch(diff),
-            input.part ?? 1
+            input.part ?? 1,
           );
         }),
     }),
@@ -322,7 +322,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
             if (!file) {
               log.info(
                 { file: input.file, severity: input.severity },
-                "issue rejected: file not changed by this PR"
+                "issue rejected: file not changed by this PR",
               );
 
               return {
@@ -341,7 +341,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
                 file: data.file,
                 duplicate,
               },
-              "issue emitted"
+              "issue emitted",
             );
 
             if (duplicate) {
@@ -351,7 +351,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
             UIIssues.set(data.id, data);
             writer.write({ type: "data-issue", data, transient: true });
             return { ok: true };
-          }
+          },
         ),
     }),
   } satisfies Record<ReviewToolName, unknown>;

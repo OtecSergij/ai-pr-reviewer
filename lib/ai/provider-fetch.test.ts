@@ -27,7 +27,7 @@ function collectingLogger() {
         write(line: string) {
           records.push(JSON.parse(line) as Record<string, unknown>);
         },
-      }
+      },
     ),
   };
 }
@@ -49,8 +49,8 @@ describe("the synthetic TTFB error", () => {
           url: URL_UNDER_TEST,
           requestBodyValues: {},
           statusCode: 504,
-        })
-      )
+        }),
+      ),
     ).toBe(false);
   });
 
@@ -67,7 +67,7 @@ describe("tracedFetch on a response", () => {
         new Response("{}", {
           status: 429,
           headers: { "retry-after": "58" },
-        })
+        }),
     );
 
     const response = await tracedFetch("groq", logger)(URL_UNDER_TEST);
@@ -90,15 +90,15 @@ describe("tracedFetch on a stalled provider", () => {
       (_input, init) =>
         new Promise((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason)
+            reject(init.signal?.reason),
           );
-        })
+        }),
     );
 
     await expect(
-      tracedFetch("google", log, 20)(URL_UNDER_TEST)
+      tracedFetch("google", log, 20)(URL_UNDER_TEST),
     ).rejects.toSatisfy(
-      (e) => APICallError.isInstance(e) && isTtfbTimeout(e) && !e.isRetryable
+      (e) => APICallError.isInstance(e) && isTtfbTimeout(e) && !e.isRetryable,
     );
   });
 
@@ -120,18 +120,22 @@ describe("tracedFetch when the user pressed Stop", () => {
       (_input, init) =>
         new Promise((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason)
+            reject(init.signal?.reason),
           );
-        })
+        }),
     );
 
-    const pending = tracedFetch("groq", log, 5_000)(URL_UNDER_TEST, {
+    const pending = tracedFetch(
+      "groq",
+      log,
+      5_000,
+    )(URL_UNDER_TEST, {
       signal: user.signal,
     });
     user.abort();
 
     await expect(pending).rejects.toSatisfy(
-      (e) => e instanceof DOMException && e.name === "AbortError"
+      (e) => e instanceof DOMException && e.name === "AbortError",
     );
   });
 
@@ -141,14 +145,14 @@ describe("tracedFetch when the user pressed Stop", () => {
       (_input, init) =>
         new Promise((_resolve, reject) => {
           init?.signal?.addEventListener("abort", () =>
-            reject(init.signal?.reason)
+            reject(init.signal?.reason),
           );
           user.abort();
-        })
+        }),
     );
 
     await expect(
-      tracedFetch("groq", log, 0)(URL_UNDER_TEST, { signal: user.signal })
+      tracedFetch("groq", log, 0)(URL_UNDER_TEST, { signal: user.signal }),
     ).rejects.toSatisfy((e) => !APICallError.isInstance(e));
   });
 });
@@ -161,7 +165,7 @@ describe("tracedFetch on a transport failure", () => {
     });
 
     await expect(tracedFetch("cerebras", log)(URL_UNDER_TEST)).rejects.toBe(
-      boom
+      boom,
     );
   });
 });

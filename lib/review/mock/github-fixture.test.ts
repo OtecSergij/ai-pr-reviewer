@@ -55,13 +55,13 @@ describe("fixture patches line up with file contents", () => {
           lastNewLineno = line.newLineno;
           expect(
             lines[line.newLineno - 1],
-            `${file.filename}:${line.newLineno} (${line.kind})`
+            `${file.filename}:${line.newLineno} (${line.kind})`,
           ).toBe(line.content);
         }
 
         expect(
           lastNewLineno,
-          `${file.filename} hunk ending at ${hunk.newEnd}`
+          `${file.filename} hunk ending at ${hunk.newEnd}`,
         ).toBe(hunk.newEnd);
       }
     }
@@ -118,7 +118,7 @@ describe("fixture directory listing", () => {
     const entries = await gh.listDirectory({ path: "", ref: await headSha() });
 
     expect(
-      entries.map((entry) => ({ path: entry.path, type: entry.type }))
+      entries.map((entry) => ({ path: entry.path, type: entry.type })),
     ).toEqual([
       { path: "README.md", type: "file" },
       { path: "index.js", type: "file" },
@@ -157,13 +157,13 @@ describe("fixture directory listing", () => {
 describe("fixture error paths", () => {
   it("rejects a file that is not in the fixture", async () => {
     await expect(contentsOf("src/parse.ts")).rejects.toBeInstanceOf(
-      NotFoundError
+      NotFoundError,
     );
   });
 
   it("rejects a directory that is not in the fixture", async () => {
     await expect(
-      gh.listDirectory({ path: "lib", ref: await headSha() })
+      gh.listDirectory({ path: "lib", ref: await headSha() }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -184,7 +184,7 @@ describe("fixture error paths", () => {
 
   it("rejects listing a file as a directory", async () => {
     await expect(
-      gh.listDirectory({ path: "index.js", ref: await headSha() })
+      gh.listDirectory({ path: "index.js", ref: await headSha() }),
     ).rejects.toBeInstanceOf(GitHubApiError);
   });
 
@@ -212,17 +212,17 @@ describe("fixture issues enrich into rendered code", () => {
 
       for (const target of targets) {
         expect(target.lineno, `${issue.file} target`).toBeGreaterThanOrEqual(
-          issue.line_start
+          issue.line_start,
         );
         expect(target.lineno, `${issue.file} target`).toBeLessThanOrEqual(
-          issue.line_end
+          issue.line_end,
         );
       }
 
       for (const line of enriched.codeLines) {
         if (line.lineno === null) continue;
         expect(lines[line.lineno - 1], `${issue.file}:${line.lineno}`).toBe(
-          line.content
+          line.content,
         );
       }
     }

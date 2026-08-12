@@ -41,7 +41,7 @@ export type TranscriptEntry =
   | ({ kind: "failover" } & FailoverData);
 
 export function isTextEntry(
-  entry: TranscriptEntry
+  entry: TranscriptEntry,
 ): entry is TranscriptTextEntry {
   return entry.kind === "text" || entry.kind === "reasoning";
 }
@@ -62,7 +62,7 @@ export function totalTextChars(entries: TranscriptEntry[]): number {
 
 export function revealTranscript(
   entries: TranscriptEntry[],
-  budget: number
+  budget: number,
 ): TranscriptEntry[] {
   const out: TranscriptEntry[] = [];
   let remaining = budget;
@@ -151,6 +151,6 @@ export function partiallyReadFiles(entries: TranscriptEntry[]): Set<string> {
 
 export function countToolCalls(transcript: TranscriptEntry[]): number {
   return transcript.filter(
-    (e) => e.kind === "tool" && e.toolName !== REVIEW_TOOL_NAMES.emitIssue
+    (e) => e.kind === "tool" && e.toolName !== REVIEW_TOOL_NAMES.emitIssue,
   ).length;
 }

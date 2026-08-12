@@ -61,7 +61,9 @@ describe("translateOctokitError status mapping", () => {
   it("maps a secondary-rate-limit body to SecondaryRateLimitError(60)", () => {
     try {
       translateOctokitError(
-        requestError(403, { message: "You have exceeded a secondary rate limit" }),
+        requestError(403, {
+          message: "You have exceeded a secondary rate limit",
+        }),
         "pr",
       );
       expect.unreachable();
@@ -73,7 +75,10 @@ describe("translateOctokitError status mapping", () => {
 
   it("uses the retry-after header for SecondaryRateLimitError", () => {
     try {
-      translateOctokitError(requestError(429, { headers: { "retry-after": "30" } }), "pr");
+      translateOctokitError(
+        requestError(429, { headers: { "retry-after": "30" } }),
+        "pr",
+      );
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(SecondaryRateLimitError);
@@ -83,7 +88,10 @@ describe("translateOctokitError status mapping", () => {
 
   it("falls back to 60s when retry-after is not a positive number", () => {
     try {
-      translateOctokitError(requestError(403, { headers: { "retry-after": "0" } }), "pr");
+      translateOctokitError(
+        requestError(403, { headers: { "retry-after": "0" } }),
+        "pr",
+      );
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(SecondaryRateLimitError);
@@ -111,7 +119,10 @@ describe("translateOctokitError status mapping", () => {
 
   it("maps other 403 responses to ForbiddenError carrying the body message", () => {
     try {
-      translateOctokitError(requestError(403, { message: "Resource protected" }), "pr");
+      translateOctokitError(
+        requestError(403, { message: "Resource protected" }),
+        "pr",
+      );
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(ForbiddenError);
@@ -121,7 +132,10 @@ describe("translateOctokitError status mapping", () => {
 
   it("maps an unclassified status to GitHubApiError", () => {
     try {
-      translateOctokitError(requestError(502, { message: "bad gateway" }), "pr");
+      translateOctokitError(
+        requestError(502, { message: "bad gateway" }),
+        "pr",
+      );
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(GitHubApiError);
@@ -132,9 +146,17 @@ describe("translateOctokitError status mapping", () => {
 
 describe("translateOctokitError timeouts", () => {
   function timedOut(): RequestError {
-    const err = new RequestError("The operation was aborted due to timeout", 500, {
-      request: { method: "GET", url: "https://api.github.com/x", headers: {} },
-    });
+    const err = new RequestError(
+      "The operation was aborted due to timeout",
+      500,
+      {
+        request: {
+          method: "GET",
+          url: "https://api.github.com/x",
+          headers: {},
+        },
+      },
+    );
     err.cause = new DOMException(
       "The operation was aborted due to timeout",
       "TimeoutError",
@@ -198,7 +220,10 @@ describe("translateOctokitError retry-after regression (#36)", () => {
 
   it("still produces a GitHubError for the 5xx case", () => {
     try {
-      translateOctokitError(requestError(503, { headers: { "retry-after": "5" } }), "pr");
+      translateOctokitError(
+        requestError(503, { headers: { "retry-after": "5" } }),
+        "pr",
+      );
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(GitHubError);

@@ -16,7 +16,7 @@ export function useElapsed(active: boolean): number {
     const startedAt = Date.now();
     const id = window.setInterval(
       () => setElapsed(Math.floor((Date.now() - startedAt) / 1000)),
-      1000
+      1000,
     );
 
     return () => window.clearInterval(id);

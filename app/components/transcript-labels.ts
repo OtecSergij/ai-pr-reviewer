@@ -38,7 +38,7 @@ export function reasonLabel(reason: FailureReason): string {
 
 export function toolLabel(
   toolName: string,
-  input: unknown
+  input: unknown,
 ): { label: string; detail: string } {
   const i = input as Record<string, unknown> | undefined;
   switch (toolName) {

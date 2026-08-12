@@ -61,7 +61,7 @@ const RETRY_OPTS = {
 export function createGithubAccess(
   token: string | null,
   pr: PRRef,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): GithubAccess {
   const request = { fetch: timeboxedFetch(), signal };
   const client = token
@@ -84,7 +84,7 @@ export function createGithubAccess(
   const ensureFiles = (): Promise<Map<string, PRFile>> => {
     if (!filesPromise) {
       filesPromise = withRetry(() => getPRFiles(client, pr), retryOpts).then(
-        (arr) => new Map(arr.map((f) => [f.filename, f]))
+        (arr) => new Map(arr.map((f) => [f.filename, f])),
       );
     }
     return filesPromise;
@@ -113,7 +113,7 @@ export function createGithubAccess(
               ref,
               maxBytes,
             }),
-          retryOpts
+          retryOpts,
         );
         cached.catch(() => {
           if (fileContentsCache.get(key) === cached) {
@@ -136,7 +136,7 @@ export function createGithubAccess(
               path,
               ref,
             }),
-          retryOpts
+          retryOpts,
         );
         cached.catch(() => {
           if (directoryCache.get(key) === cached) {
@@ -157,7 +157,7 @@ async function withRetry<T>(
     baseMs: number;
     isRetryable: (e: unknown) => boolean;
     signal?: AbortSignal;
-  }
+  },
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     options.signal?.throwIfAborted();

@@ -35,7 +35,11 @@ describe("revealTranscript", () => {
   });
 
   it("lets events past the cut through in full", () => {
-    const entries = [{ kind: "text", text: "abcdef" } as const, tool("a"), failover];
+    const entries = [
+      { kind: "text", text: "abcdef" } as const,
+      tool("a"),
+      failover,
+    ];
 
     expect(revealTranscript(entries, 2)).toEqual([
       { kind: "text", text: "ab" },
@@ -147,7 +151,7 @@ describe("partiallyReadFiles", () => {
   const diffEntry = (
     filename: string,
     part: number,
-    totalParts: number
+    totalParts: number,
   ): TranscriptEntry => ({
     kind: "tool",
     toolCallId: `${filename}:${part}`,
@@ -158,9 +162,9 @@ describe("partiallyReadFiles", () => {
   });
 
   it("marks a file whose parts were left unread", () => {
-    expect(
-      partiallyReadFiles([diffEntry("index.js", 1, 3)])
-    ).toEqual(new Set(["index.js"]));
+    expect(partiallyReadFiles([diffEntry("index.js", 1, 3)])).toEqual(
+      new Set(["index.js"]),
+    );
   });
 
   it("clears a file once every part has been served", () => {
@@ -168,7 +172,7 @@ describe("partiallyReadFiles", () => {
       partiallyReadFiles([
         diffEntry("index.js", 1, 2),
         diffEntry("index.js", 2, 2),
-      ])
+      ]),
     ).toEqual(new Set());
   });
 
@@ -177,7 +181,7 @@ describe("partiallyReadFiles", () => {
       partiallyReadFiles([
         diffEntry("index.js", 1, 2),
         diffEntry("index.js", 1, 2),
-      ])
+      ]),
     ).toEqual(new Set(["index.js"]));
   });
 
@@ -192,7 +196,7 @@ describe("partiallyReadFiles", () => {
 
   it("marks a file whose only read was refused by the budget", () => {
     expect(partiallyReadFiles([refusedEntry("big.ts", "part_limit")])).toEqual(
-      new Set(["big.ts"])
+      new Set(["big.ts"]),
     );
   });
 
@@ -201,13 +205,13 @@ describe("partiallyReadFiles", () => {
       partiallyReadFiles([
         diffEntry("index.js", 1, 1),
         refusedEntry("index.js", "part_limit"),
-      ])
+      ]),
     ).toEqual(new Set());
   });
 
   it("says nothing about a file that simply has no diff", () => {
     expect(partiallyReadFiles([refusedEntry("logo.png", "no_patch")])).toEqual(
-      new Set()
+      new Set(),
     );
   });
 
@@ -242,7 +246,7 @@ describe("totalTextChars", () => {
       totalTextChars([
         { kind: "text", text: "abcd" },
         { kind: "reasoning", text: "ef" },
-      ])
+      ]),
     ).toBe(6);
   });
 
@@ -251,7 +255,7 @@ describe("totalTextChars", () => {
       totalTextChars([
         toolEntry,
         { kind: "failover", from: "groq", to: "cerebras", reason: "server" },
-      ])
+      ]),
     ).toBe(0);
   });
 
@@ -267,10 +271,7 @@ describe("totalTextChars", () => {
 });
 
 describe("toolPath", () => {
-  const call = (
-    toolName: string,
-    input: unknown
-  ): TranscriptEntry => ({
+  const call = (toolName: string, input: unknown): TranscriptEntry => ({
     kind: "tool",
     toolCallId: "call-1",
     toolName,
@@ -280,32 +281,32 @@ describe("toolPath", () => {
 
   it("reads a diff request as a file", () => {
     expect(
-      toolPath(call(REVIEW_TOOL_NAMES.getDiff, { filename: "index.js" }))
+      toolPath(call(REVIEW_TOOL_NAMES.getDiff, { filename: "index.js" })),
     ).toEqual({ path: "index.js", type: "file" });
   });
 
   it("reads a contents request as a file", () => {
     expect(
-      toolPath(call(REVIEW_TOOL_NAMES.getFileContents, { path: "index.js" }))
+      toolPath(call(REVIEW_TOOL_NAMES.getFileContents, { path: "index.js" })),
     ).toEqual({ path: "index.js", type: "file" });
   });
 
   it("reads a listing request as a directory", () => {
     expect(
-      toolPath(call(REVIEW_TOOL_NAMES.listDirectory, { path: "test" }))
+      toolPath(call(REVIEW_TOOL_NAMES.listDirectory, { path: "test" })),
     ).toEqual({ path: "test", type: "dir" });
   });
 
   it("keeps the repository root, which has no name of its own, out of the list", () => {
     expect(toolPath(call(REVIEW_TOOL_NAMES.listDirectory, { path: "" }))).toBe(
-      null
+      null,
     );
   });
 
   it("has no path to offer for a tool that reads no file", () => {
-    expect(toolPath(call(REVIEW_TOOL_NAMES.emitIssue, { file: "index.js" }))).toBe(
-      null
-    );
+    expect(
+      toolPath(call(REVIEW_TOOL_NAMES.emitIssue, { file: "index.js" })),
+    ).toBe(null);
   });
 
   it("has no path to offer for an argument the model never sent", () => {
@@ -333,12 +334,14 @@ describe("countToolCalls", () => {
         call(REVIEW_TOOL_NAMES.getDiff),
         call(REVIEW_TOOL_NAMES.emitIssue),
         { kind: "text", text: "Review complete." },
-      ])
+      ]),
     ).toBe(2);
   });
 
   it("counts nothing for a review that read nothing", () => {
-    expect(countToolCalls([{ kind: "text", text: "No issues found." }])).toBe(0);
+    expect(countToolCalls([{ kind: "text", text: "No issues found." }])).toBe(
+      0,
+    );
   });
 });
 

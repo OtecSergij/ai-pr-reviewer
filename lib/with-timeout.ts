@@ -1,7 +1,7 @@
 export function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  message: string
+  message: string,
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {

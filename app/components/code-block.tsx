@@ -27,7 +27,7 @@ export function CodeBlock({
 }: CodeBlockProps) {
   const key = cacheKey(language, codeLines);
   const [tokenLines, setTokenLines] = useState<ThemedToken[][] | null>(
-    () => TOKEN_CACHE.get(key) ?? null
+    () => TOKEN_CACHE.get(key) ?? null,
   );
 
   useEffect(() => {
@@ -80,12 +80,12 @@ export function CodeBlock({
                   {line.content === ""
                     ? " "
                     : tokens
-                    ? tokens.map((token, ti) => (
-                        <span key={ti} style={{ color: token.color }}>
-                          {token.content}
-                        </span>
-                      ))
-                    : line.content}
+                      ? tokens.map((token, ti) => (
+                          <span key={ti} style={{ color: token.color }}>
+                            {token.content}
+                          </span>
+                        ))
+                      : line.content}
                 </span>
               </div>
             );

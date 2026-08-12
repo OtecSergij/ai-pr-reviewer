@@ -184,7 +184,11 @@ function classifyApiError(
       ...retryAfter(error),
     };
   if (isContextOverflow(error))
-    return { hop: true, reason: "context-overflow", message: TOO_LARGE_MESSAGE };
+    return {
+      hop: true,
+      reason: "context-overflow",
+      message: TOO_LARGE_MESSAGE,
+    };
   if (error.isRetryable)
     return { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
 

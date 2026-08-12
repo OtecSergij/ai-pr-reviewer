@@ -33,7 +33,7 @@ function urlOf(input: RequestInfo | URL): string {
 export function tracedFetch(
   provider: ProviderName,
   log: Logger,
-  timeoutMs: number = TTFB_TIMEOUT_MS
+  timeoutMs: number = TTFB_TIMEOUT_MS,
 ): typeof fetch {
   return async (input, init) => {
     const url = urlOf(input);
@@ -57,7 +57,7 @@ export function tracedFetch(
           retryAfter: response.headers.get("retry-after"),
           durationMs: Date.now() - startedAt,
         },
-        "provider request"
+        "provider request",
       );
 
       return response;
@@ -67,12 +67,15 @@ export function tracedFetch(
       if (ttfb.signal.aborted && external?.aborted !== true) {
         log.warn(
           { provider, host, durationMs, ttfbTimeoutMs: timeoutMs },
-          "provider request timed out before response headers"
+          "provider request timed out before response headers",
         );
         throw ttfbTimeoutError(url);
       }
 
-      log.warn({ err: e, provider, host, durationMs }, "provider request failed");
+      log.warn(
+        { err: e, provider, host, durationMs },
+        "provider request failed",
+      );
       throw e;
     } finally {
       clearTimeout(timer);

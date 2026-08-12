@@ -92,7 +92,7 @@ export function injectedStreamError(): APICallError {
 
 export function streamErrorStopIndex(
   steps: MockStep[],
-  messages: ModelMessage[] | undefined
+  messages: ModelMessage[] | undefined,
 ): number | null {
   if (env.MOCK_ERROR === "mid-stream") return midStreamStopIndex(steps);
 
@@ -109,7 +109,7 @@ function isFirstAttempt(messages: ModelMessage[] | undefined): boolean {
 
 function midStreamStopIndex(steps: MockStep[]): number {
   const issueIndexes = steps.flatMap((step, index) =>
-    isIssueStep(step) ? [index] : []
+    isIssueStep(step) ? [index] : [],
   );
 
   return (

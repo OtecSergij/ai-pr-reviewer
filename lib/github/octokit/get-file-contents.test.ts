@@ -112,7 +112,7 @@ const read = (client: Octokit, path: string, maxBytes = MAX_BYTES) =>
 describe("getFileContents on a readable blob", () => {
   it("reads a zero-byte file as empty content", async () => {
     const client = clientReturning(
-      file({ path: ".gitkeep", name: ".gitkeep", content: "", size: 0 })
+      file({ path: ".gitkeep", name: ".gitkeep", content: "", size: 0 }),
     );
 
     await expect(read(client, ".gitkeep")).resolves.toEqual({
@@ -133,7 +133,7 @@ describe("getFileContents on a readable blob", () => {
         name: "index.js",
         content: `${encoded.slice(0, 20)}\n${encoded.slice(20)}\n`,
         size: Buffer.byteLength(source, "utf-8"),
-      })
+      }),
     );
 
     const contents = await read(client, "index.js");
@@ -148,7 +148,7 @@ describe("getFileContents on something that is not a readable blob", () => {
 
     await expect(read(client, "test")).rejects.toBeInstanceOf(GitHubApiError);
     await expect(read(client, "test")).rejects.toThrow(
-      "Expected file at test, got directory"
+      "Expected file at test, got directory",
     );
   });
 
@@ -156,10 +156,10 @@ describe("getFileContents on something that is not a readable blob", () => {
     const client = clientReturning(symlink("config.js"));
 
     await expect(read(client, "config.js")).rejects.toBeInstanceOf(
-      GitHubApiError
+      GitHubApiError,
     );
     await expect(read(client, "config.js")).rejects.toThrow(
-      "Expected file at config.js, got symlink"
+      "Expected file at config.js, got symlink",
     );
   });
 
@@ -171,7 +171,7 @@ describe("getFileContents on something that is not a readable blob", () => {
         encoding: "none",
         content: "",
         size: 2_400_000,
-      })
+      }),
     );
 
     await expect(read(client, "dist/bundle.js")).resolves.toEqual({
@@ -193,7 +193,7 @@ describe("getFileContents against the caller's size cap", () => {
         name: "big.ts",
         content: Buffer.from(source, "utf-8").toString("base64"),
         size: Buffer.byteLength(source, "utf-8"),
-      })
+      }),
     );
 
     const contents = await read(client, "src/big.ts");
@@ -210,7 +210,7 @@ describe("getFileContents against the caller's size cap", () => {
         name: "edge.ts",
         content: Buffer.from(source, "utf-8").toString("base64"),
         size: MAX_BYTES,
-      })
+      }),
     );
 
     const contents = await read(client, "src/edge.ts");
@@ -224,10 +224,10 @@ describe("getFileContents error translation", () => {
     const client = clientFailing(notFound("src/parse.ts"));
 
     await expect(read(client, "src/parse.ts")).rejects.toBeInstanceOf(
-      NotFoundError
+      NotFoundError,
     );
     await expect(read(client, "src/parse.ts")).rejects.toThrow(
-      `file ${OWNER}/${REPO}@${REF}:src/parse.ts was not found`
+      `file ${OWNER}/${REPO}@${REF}:src/parse.ts was not found`,
     );
   });
 });

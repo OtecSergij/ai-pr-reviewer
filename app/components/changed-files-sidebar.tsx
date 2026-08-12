@@ -38,7 +38,7 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
 }: ChangedFilesSidebarProps) {
   const changedSet = useMemo(
     () => new Set(files.map((f) => f.filename)),
-    [files]
+    [files],
   );
 
   const { activeFile, visited } = useMemo(() => {
@@ -174,8 +174,8 @@ function FileRow({
   const bg = active
     ? "animate-file-pulse"
     : filtered
-    ? "bg-surface-subtle"
-    : "bg-white";
+      ? "bg-surface-subtle"
+      : "bg-white";
 
   const border = filtered ? "border-[#a5b4fc]" : "border-border-subtle";
 

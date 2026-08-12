@@ -29,8 +29,7 @@ vi.mock("@/lib/log", () => {
 const { POST } = await import("@/app/api/review/route");
 
 const PR_URL = "https://github.com/vercel/ms/pull/17";
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const streamed = (): Response =>
   new Response(
@@ -39,7 +38,7 @@ const streamed = (): Response =>
         controller.close();
       },
     }),
-    { headers: { "content-type": "text/event-stream" } }
+    { headers: { "content-type": "text/event-stream" } },
   );
 
 const post = (
@@ -47,7 +46,7 @@ const post = (
     body?: string;
     contentType?: string | null;
     requestId?: string;
-  } = {}
+  } = {},
 ): Promise<Response> => {
   const headers = new Headers();
   if (options.contentType !== null) {
@@ -62,7 +61,7 @@ const post = (
       method: "POST",
       headers,
       body: options.body ?? JSON.stringify({ prUrl: PR_URL }),
-    })
+    }),
   );
 };
 
@@ -191,10 +190,12 @@ describe("the request id the route logs under", () => {
     const requestId = "6b7d1d94-5a2a-4f0a-9c1e-2e0d5a6c7b81";
 
     expect(
-      (await post({ contentType: null, requestId })).headers.get("x-request-id")
+      (await post({ contentType: null, requestId })).headers.get(
+        "x-request-id",
+      ),
     ).toBe(requestId);
     expect(
-      (await post({ body: "{", requestId })).headers.get("x-request-id")
+      (await post({ body: "{", requestId })).headers.get("x-request-id"),
     ).toBe(requestId);
   });
 

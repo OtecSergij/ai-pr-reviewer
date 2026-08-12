@@ -113,7 +113,9 @@ describe("classifyFailure unwraps RetryError", () => {
 
 describe("classifyFailure auth statuses", () => {
   it("distinguishes user-key from service-key on 401", () => {
-    expect(classifyFailure(apiError({ statusCode: 401 }), { userKey: true })).toEqual({
+    expect(
+      classifyFailure(apiError({ statusCode: 401 }), { userKey: true }),
+    ).toEqual({
       hop: false,
       reason: "auth",
       message: INVALID_KEY_MESSAGE,
@@ -128,7 +130,9 @@ describe("classifyFailure auth statuses", () => {
   });
 
   it("distinguishes user-key from service-key on 403", () => {
-    expect(classifyFailure(apiError({ statusCode: 403 }), { userKey: true })).toEqual({
+    expect(
+      classifyFailure(apiError({ statusCode: 403 }), { userKey: true }),
+    ).toEqual({
       hop: false,
       reason: "auth",
       message: NO_ACCESS_MESSAGE,
@@ -606,16 +610,19 @@ describe("errorToResponse over every GitHub failure the app can raise", () => {
 
       expect(response?.status).toBe(status);
       expect(response?.headers.get("x-review-error")).toBe(kind);
-    }
+    },
   );
 
-  it.each(githubFailures)("says out loud what went wrong on $code", async ({ error }) => {
-    const raised = error();
+  it.each(githubFailures)(
+    "says out loud what went wrong on $code",
+    async ({ error }) => {
+      const raised = error();
 
-    await expect(errorToResponse(raised)?.text()).resolves.toBe(
-      errorToMessage(raised)
-    );
-  });
+      await expect(errorToResponse(raised)?.text()).resolves.toBe(
+        errorToMessage(raised),
+      );
+    },
+  );
 
   it("keeps the two tables reading the same failure code", () => {
     for (const { code, error } of githubFailures) {
@@ -627,19 +634,21 @@ describe("errorToResponse over every GitHub failure the app can raise", () => {
 describe("errorToMessage outside GitHub's failures", () => {
   it("gives a model failure the generic server-side wording", () => {
     expect(errorToMessage(new Error("ECONNRESET"))).toBe(
-      "The review couldn't be completed because of a problem on our end. Please try again later."
+      "The review couldn't be completed because of a problem on our end. Please try again later.",
     );
   });
 
   it("keeps a provider's own words out of the message it shows", () => {
     expect(
-      errorToMessage(apiError({ statusCode: 429, message: "org quota exceeded" }))
+      errorToMessage(
+        apiError({ statusCode: 429, message: "org quota exceeded" }),
+      ),
     ).toBe(TRANSIENT_MESSAGE);
   });
 
   it("collapses a multi-line GitHub message into one line", () => {
     expect(errorToMessage(new GitHubApiError(502, "Bad\n\n  Gateway"))).toBe(
-      "GitHub API error (502): Bad Gateway"
+      "GitHub API error (502): Bad Gateway",
     );
   });
 });

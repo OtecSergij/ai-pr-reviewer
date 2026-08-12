@@ -14,7 +14,7 @@ function overheadChars(tools: Record<string, BudgetTool>): number {
       description: tool.description,
       parameters: asSchema(tool.inputSchema as FlexibleSchema<unknown>)
         .jsonSchema,
-    }))
+    })),
   );
 
   return SYSTEM.length + schemas.length;
@@ -23,7 +23,7 @@ function overheadChars(tools: Record<string, BudgetTool>): number {
 export function estimateInputTokens(
   messages: ModelMessage[],
   tools: Record<string, BudgetTool>,
-  maxOutputTokens?: number
+  maxOutputTokens?: number,
 ): number {
   const chars = JSON.stringify(messages).length + overheadChars(tools);
   return Math.ceil(chars / CHARS_PER_TOKEN) + (maxOutputTokens ?? 0);

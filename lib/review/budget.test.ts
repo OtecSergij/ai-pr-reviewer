@@ -12,11 +12,14 @@ const tools = createReviewTools(
   new Map(),
   { headSha: "sha", owner: "o", repo: "r" },
   {} as never,
-  log
+  log,
 );
 
 const opening: ModelMessage[] = [
-  { role: "user", content: "Review this pull request: https://github.com/o/r/pull/1" },
+  {
+    role: "user",
+    content: "Review this pull request: https://github.com/o/r/pull/1",
+  },
 ];
 
 const overheadTokens =
@@ -40,7 +43,7 @@ describe("the fixed per-request overhead", () => {
     };
 
     expect(estimateInputTokens(opening, wordier)).toBeGreaterThan(
-      estimateInputTokens(opening, tools) + 1_500
+      estimateInputTokens(opening, tools) + 1_500,
     );
   });
 });
@@ -52,19 +55,19 @@ describe("estimateInputTokens", () => {
       { role: "assistant", content: "x".repeat(3_500) },
     ];
     expect(estimateInputTokens(longer, tools)).toBeGreaterThan(
-      estimateInputTokens(opening, tools) + 900
+      estimateInputTokens(opening, tools) + 900,
     );
   });
 
   it("reserves the declared output ceiling, because Cerebras charges it at admission", () => {
     expect(estimateInputTokens(opening, tools, 6_000)).toBe(
-      estimateInputTokens(opening, tools) + 6_000
+      estimateInputTokens(opening, tools) + 6_000,
     );
   });
 
   it("reserves nothing for an uncapped candidate", () => {
     expect(estimateInputTokens(opening, tools, undefined)).toBe(
-      estimateInputTokens(opening, tools)
+      estimateInputTokens(opening, tools),
     );
   });
 });
@@ -80,13 +83,13 @@ describe("budgetCeiling", () => {
 describe("the opening request of a review", () => {
   it("is admitted by every free candidate, so no run swipes before it starts", () => {
     expect(estimateInputTokens(opening, tools)).toBeLessThan(
-      budgetCeiling(8_000)
+      budgetCeiling(8_000),
     );
     expect(estimateInputTokens(opening, tools, 6_000)).toBeLessThan(
-      budgetCeiling(30_000)
+      budgetCeiling(30_000),
     );
     expect(estimateInputTokens(opening, tools, 24_000)).toBeLessThan(
-      budgetCeiling(250_000)
+      budgetCeiling(250_000),
     );
   });
 });

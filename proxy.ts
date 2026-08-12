@@ -8,8 +8,8 @@ export function proxy(request: NextRequest) {
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${
-    isDev ? " 'unsafe-eval'" : ""
-  };
+      isDev ? " 'unsafe-eval'" : ""
+    };
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self';
@@ -28,7 +28,7 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set(
     "Content-Security-Policy",
-    contentSecurityPolicyHeaderValue
+    contentSecurityPolicyHeaderValue,
   );
 
   const response = NextResponse.next({
@@ -38,7 +38,7 @@ export function proxy(request: NextRequest) {
   });
   response.headers.set(
     "Content-Security-Policy",
-    contentSecurityPolicyHeaderValue
+    contentSecurityPolicyHeaderValue,
   );
 
   return response;

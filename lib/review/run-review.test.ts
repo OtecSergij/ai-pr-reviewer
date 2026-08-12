@@ -15,14 +15,13 @@ type StreamChunk = { type: string } & Record<string, unknown>;
 
 type FixtureFactory = (pr: PRRef) => GithubAccess;
 
-const { transcripts, logRecords, saveReviewMock, githubAccessMock } = vi.hoisted(
-  () => ({
+const { transcripts, logRecords, saveReviewMock, githubAccessMock } =
+  vi.hoisted(() => ({
     transcripts: [] as unknown[][],
     logRecords: [] as LogRecord[],
     saveReviewMock: vi.fn(),
     githubAccessMock: vi.fn(),
-  })
-);
+  }));
 
 vi.mock("@/lib/redis", () => ({
   redis: { isReady: false, isOpen: true },
@@ -42,7 +41,7 @@ vi.mock("@/lib/log", () => {
               level,
               data: (data ?? {}) as Record<string, unknown>,
               msg: msg ?? "",
-            }
+            },
       );
     };
 
@@ -67,7 +66,7 @@ vi.mock("@/lib/review/budget", async (importOriginal) => {
     estimateInputTokens: (
       messages: Parameters<typeof actual.estimateInputTokens>[0],
       tools: Parameters<typeof actual.estimateInputTokens>[1],
-      maxOutputTokens?: number
+      maxOutputTokens?: number,
     ) => {
       transcripts.push(JSON.parse(JSON.stringify(messages)) as unknown[]);
       return actual.estimateInputTokens(messages, tools, maxOutputTokens);
@@ -100,7 +99,7 @@ type LoadedReview = {
 };
 
 const loadRunReview = async (
-  options: LoadOptions = {}
+  options: LoadOptions = {},
 ): Promise<LoadedReview> => {
   vi.stubEnv("MOCK_REVIEW", "1");
   vi.stubEnv("MOCK_OFFLINE", options.offline === false ? undefined : "1");
@@ -115,7 +114,7 @@ const loadRunReview = async (
   ]);
 
   githubAccessMock.mockImplementation((_token: string | null, pr: PRRef) =>
-    createFixtureGithubAccess(pr)
+    createFixtureGithubAccess(pr),
   );
 
   return { runReview, fixture: createFixtureGithubAccess };
@@ -143,7 +142,7 @@ const parseChunks = (lines: string[]): StreamChunk[] =>
 
 const consume = async (
   response: Response,
-  onChunk?: (chunk: StreamChunk) => void
+  onChunk?: (chunk: StreamChunk) => void,
 ): Promise<StreamChunk[]> => {
   const body = response.body;
   if (!body) throw new Error("the review response carried no stream");
@@ -183,7 +182,7 @@ const consume = async (
 
 const call = (
   runReview: LoadedReview["runReview"],
-  options: { signal?: AbortSignal; githubPat?: string } = {}
+  options: { signal?: AbortSignal; githubPat?: string } = {},
 ): Promise<Response> =>
   runReview({
     prUrl: PR_URL,
@@ -199,12 +198,13 @@ const review = async (
     signal?: AbortSignal;
     githubPat?: string;
     onChunk?: (chunk: StreamChunk) => void;
-  } = {}
-): Promise<StreamChunk[]> => consume(await call(runReview, options), options.onChunk);
+  } = {},
+): Promise<StreamChunk[]> =>
+  consume(await call(runReview, options), options.onChunk);
 
 const dataOf = (
   chunks: StreamChunk[],
-  type: string
+  type: string,
 ): Record<string, unknown>[] =>
   chunks
     .filter((chunk) => chunk.type === type)
@@ -288,13 +288,13 @@ describe("a chain where every model stops on length", () => {
     const parts = messagesOf(1)
       .filter((message) => message.role === "assistant")
       .flatMap((message) =>
-        typeof message.content === "string" ? [] : message.content
+        typeof message.content === "string" ? [] : message.content,
       );
 
     expect(parts).not.toHaveLength(0);
     expect(parts.filter((part) => part.type === "reasoning")).toEqual([]);
     expect(
-      parts.filter((part) => part.type === "text" && part.text === "")
+      parts.filter((part) => part.type === "text" && part.text === ""),
     ).toEqual([]);
   });
 
@@ -307,14 +307,18 @@ describe("a chain where every model stops on length", () => {
       messages
         .filter((message) => message.role === "assistant")
         .flatMap((message) =>
-          typeof message.content === "string" ? [] : message.content
+          typeof message.content === "string" ? [] : message.content,
         )
-        .flatMap((part) => (part.type === "tool-call" ? [part.toolCallId] : []))
+        .flatMap((part) =>
+          part.type === "tool-call" ? [part.toolCallId] : [],
+        ),
     );
     const resultIds = messages
       .filter((message) => message.role === "tool")
       .flatMap((message) => message.content)
-      .flatMap((part) => (part.type === "tool-result" ? [part.toolCallId] : []));
+      .flatMap((part) =>
+        part.type === "tool-result" ? [part.toolCallId] : [],
+      );
 
     expect(resultIds).not.toHaveLength(0);
     for (const id of resultIds) {

@@ -29,10 +29,7 @@ export async function getFileContents(
     });
 
     if (Array.isArray(data)) {
-      throw new GitHubApiError(
-        200,
-        `Expected file at ${path}, got directory`,
-      );
+      throw new GitHubApiError(200, `Expected file at ${path}, got directory`);
     }
 
     if (data.type !== "file") {

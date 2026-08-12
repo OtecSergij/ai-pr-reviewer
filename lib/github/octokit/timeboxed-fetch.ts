@@ -5,19 +5,19 @@ export const TIMEOUT_ERROR_NAME = "TimeoutError";
 function timeoutAbortReason(timeoutMs: number): DOMException {
   return new DOMException(
     `GitHub sent no response headers within ${timeoutMs}ms`,
-    TIMEOUT_ERROR_NAME
+    TIMEOUT_ERROR_NAME,
   );
 }
 
 export function timeboxedFetch(
-  timeoutMs: number = GITHUB_TIMEOUT_MS
+  timeoutMs: number = GITHUB_TIMEOUT_MS,
 ): typeof fetch {
   return async (input, init) => {
     const external = init?.signal ?? null;
     const timeout = new AbortController();
     const timer = setTimeout(
       () => timeout.abort(timeoutAbortReason(timeoutMs)),
-      timeoutMs
+      timeoutMs,
     );
     const signal = external
       ? AbortSignal.any([external, timeout.signal])

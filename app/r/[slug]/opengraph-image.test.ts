@@ -10,7 +10,9 @@ vi.mock("@/lib/db/reviews", async () => {
   return { isReviewSlug, getReview: (slug: string) => getReview(slug) };
 });
 
-vi.mock("@/lib/log", () => ({ logger: { warn: (...args: unknown[]) => warn(...args) } }));
+vi.mock("@/lib/log", () => ({
+  logger: { warn: (...args: unknown[]) => warn(...args) },
+}));
 
 vi.mock("@/app/og/load-fonts", () => ({ loadOgFonts: async () => [] }));
 
@@ -18,7 +20,7 @@ vi.mock("next/og", () => ({
   ImageResponse: class {
     constructor(
       readonly element: ReactElement,
-      readonly options: unknown
+      readonly options: unknown,
     ) {}
   },
 }));

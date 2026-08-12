@@ -44,7 +44,7 @@ export function toPRFileSummary(f: PRFile): PRFileSummary {
 
 export async function getPRFiles(
   client: Octokit,
-  ref: PRRef
+  ref: PRRef,
 ): Promise<PRFile[]> {
   const { owner, repo, prNumber } = ref;
   try {

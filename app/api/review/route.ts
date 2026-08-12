@@ -25,7 +25,10 @@ export async function POST(req: Request) {
 
   const gate = await requestLimiter.check(ip);
   if (!gate.allowed) {
-    log.info({ ip, retryAfterMs: gate.retryAfterMs }, "request rejected: rate limited");
+    log.info(
+      { ip, retryAfterMs: gate.retryAfterMs },
+      "request rejected: rate limited",
+    );
     const res = rateLimitResponse(gate);
     res.headers.set("x-request-id", requestId);
     return res;
@@ -56,7 +59,7 @@ export async function POST(req: Request) {
           "x-request-id": requestId,
           "x-review-error": "load" satisfies ErrorKind,
         },
-      }
+      },
     );
   }
 
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
       hasByoKey: Boolean(parsed.data.anthropicKey),
       hasGithubPat: Boolean(parsed.data.githubPat),
     },
-    "review requested"
+    "review requested",
   );
 
   try {

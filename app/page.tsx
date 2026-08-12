@@ -111,7 +111,7 @@ export default function Home() {
   const filtered = issues.filter(
     (i) =>
       (severityFilter === "all" || i.severity === severityFilter) &&
-      (!fileFilter || i.file === fileFilter)
+      (!fileFilter || i.file === fileFilter),
   );
 
   return (

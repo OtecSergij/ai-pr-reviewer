@@ -33,13 +33,13 @@ function hunk(start: number, length: number): string {
 
 function patchOfParts(count: number): string {
   return Array.from({ length: count }, (_, i) =>
-    hunk(i * 100 + 1, PATCH_PART_CHARS)
+    hunk(i * 100 + 1, PATCH_PART_CHARS),
   ).join("\n");
 }
 
 function summary(
   filename: string,
-  previousFilename: string | null = null
+  previousFilename: string | null = null,
 ): PRFileSummary {
   return {
     filename,
@@ -54,7 +54,7 @@ function summary(
 function fakeGithub(
   files: PRFileSummary[],
   patches: Map<string, string | null>,
-  overrides: Partial<GithubAccess> = {}
+  overrides: Partial<GithubAccess> = {},
 ): GithubAccess {
   return {
     getPRMetadata: async () => ({
@@ -121,8 +121,8 @@ describe("get_diff pagination", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(3)]])
-      )
+        new Map([["index.js", patchOfParts(3)]]),
+      ),
     );
 
     expect(await getDiff(tools, "index.js")).toMatchObject({
@@ -137,8 +137,8 @@ describe("get_diff pagination", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(2)]])
-      )
+        new Map([["index.js", patchOfParts(2)]]),
+      ),
     );
 
     expect(await getDiff(tools, "index.js", 2)).toMatchObject({
@@ -152,7 +152,7 @@ describe("get_diff pagination", () => {
   it("hands the whole patch back part by part", async () => {
     const patch = patchOfParts(3);
     const { tools } = toolsFor(
-      fakeGithub([summary("index.js")], new Map([["index.js", patch]]))
+      fakeGithub([summary("index.js")], new Map([["index.js", patch]])),
     );
 
     const parts: string[] = [];
@@ -171,8 +171,8 @@ describe("get_diff pagination", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(2)]])
-      )
+        new Map([["index.js", patchOfParts(2)]]),
+      ),
     );
 
     expect(await getDiff(tools, "index.js", 7)).toEqual({
@@ -184,7 +184,7 @@ describe("get_diff pagination", () => {
   it("serves a single hunk bigger than the cap as one part", async () => {
     const huge = hunk(1, PATCH_PART_CHARS * 2);
     const { tools } = toolsFor(
-      fakeGithub([summary("index.js")], new Map([["index.js", huge]]))
+      fakeGithub([summary("index.js")], new Map([["index.js", huge]])),
     );
 
     expect(await getDiff(tools, "index.js")).toEqual({
@@ -198,7 +198,7 @@ describe("get_diff pagination", () => {
 
   it("keeps not_in_pr and no_patch apart", async () => {
     const { tools } = toolsFor(
-      fakeGithub([summary("binary.png")], new Map([["binary.png", null]]))
+      fakeGithub([summary("binary.png")], new Map([["binary.png", null]])),
     );
 
     expect(await getDiff(tools, "binary.png")).toEqual({ status: "no_patch" });
@@ -211,8 +211,8 @@ describe("get_diff read budget", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(MAX_PARTS_PER_FILE + 2)]])
-      )
+        new Map([["index.js", patchOfParts(MAX_PARTS_PER_FILE + 2)]]),
+      ),
     );
 
     const last = await getDiff(tools, "index.js", MAX_PARTS_PER_FILE);
@@ -229,8 +229,8 @@ describe("get_diff read budget", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("package-lock.json")],
-        new Map([["package-lock.json", patchOfParts(3)]])
-      )
+        new Map([["package-lock.json", patchOfParts(3)]]),
+      ),
     );
 
     const scopes: unknown[] = [];
@@ -255,8 +255,8 @@ describe("get_diff read budget", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(2)]])
-      )
+        new Map([["index.js", patchOfParts(2)]]),
+      ),
     );
 
     for (let i = 0; i < MAX_PART_REPEATS; i++) {
@@ -277,8 +277,8 @@ describe("get_diff read budget", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(MAX_PARTS_PER_FILE + 1)]])
-      )
+        new Map([["index.js", patchOfParts(MAX_PARTS_PER_FILE + 1)]]),
+      ),
     );
 
     const over = MAX_PARTS_PER_FILE + 1;
@@ -294,8 +294,8 @@ describe("get_diff read budget", () => {
     const { tools } = toolsFor(
       fakeGithub(
         [summary("package-lock.json")],
-        new Map([["package-lock.json", patchOfParts(3)]])
-      )
+        new Map([["package-lock.json", patchOfParts(3)]]),
+      ),
     );
 
     expect(await getDiff(tools, "package-lock.json")).toMatchObject({
@@ -313,7 +313,7 @@ describe("get_diff read budget", () => {
   it("refuses a fourth request for the same part and does not spend budget on repeats", async () => {
     const files = Array.from({ length: 6 }, (_, i) => summary(`f${i}.ts`));
     const patches = new Map(
-      files.map((f) => [f.filename, patchOfParts(MAX_PARTS_PER_FILE)])
+      files.map((f) => [f.filename, patchOfParts(MAX_PARTS_PER_FILE)]),
     );
     const { tools } = toolsFor(fakeGithub(files, patches));
 
@@ -335,10 +335,10 @@ describe("get_diff read budget", () => {
     const fileCount =
       Math.ceil(PATCH_READ_BUDGET_CHARS / (PATCH_PART_CHARS * perFile)) + 1;
     const files = Array.from({ length: fileCount }, (_, i) =>
-      summary(`f${i}.ts`)
+      summary(`f${i}.ts`),
     );
     const patches = new Map(
-      files.map((f) => [f.filename, patchOfParts(perFile)])
+      files.map((f) => [f.filename, patchOfParts(perFile)]),
     );
     const { tools } = toolsFor(fakeGithub(files, patches));
 
@@ -364,8 +364,8 @@ describe("get_pr_files_summary", () => {
           ["index.js", patchOfParts(3)],
           ["dist/app.min.js", patchOfParts(1)],
           ["logo.png", null],
-        ])
-      )
+        ]),
+      ),
     );
 
     const { files } = (await callTool(tools.get_pr_files_summary, {})) as {
@@ -377,7 +377,7 @@ describe("get_pr_files_summary", () => {
         filename: f.filename,
         diff_parts: f.diff_parts,
         generated: f.generated,
-      }))
+      })),
     ).toEqual([
       { filename: "index.js", diff_parts: 3, generated: false },
       { filename: "dist/app.min.js", diff_parts: 1, generated: true },
@@ -391,8 +391,8 @@ describe("emit_issue against the changed-file list", () => {
     const { tools, issues } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(1)]])
-      )
+        new Map([["index.js", patchOfParts(1)]]),
+      ),
     );
 
     const result = await callTool(tools.emit_issue, issueOn("src/invented.ts"));
@@ -406,8 +406,8 @@ describe("emit_issue against the changed-file list", () => {
     const { tools, issues } = toolsFor(
       fakeGithub(
         [summary("lib/parse.ts", "src/parse.ts")],
-        new Map([["lib/parse.ts", patchOfParts(1)]])
-      )
+        new Map([["lib/parse.ts", patchOfParts(1)]]),
+      ),
     );
 
     expect(await callTool(tools.emit_issue, issueOn("src/parse.ts"))).toEqual({
@@ -425,8 +425,8 @@ describe("emit_issue against the changed-file list", () => {
     const { tools, issues } = toolsFor(
       fakeGithub(
         [summary("lib/parse.ts", "src/parse.ts")],
-        new Map([["lib/parse.ts", patchOfParts(1)]])
-      )
+        new Map([["lib/parse.ts", patchOfParts(1)]]),
+      ),
     );
 
     await callTool(tools.emit_issue, issueOn("src/parse.ts"));
@@ -442,8 +442,8 @@ describe("emit_issue against the changed-file list", () => {
     const { tools, issues } = toolsFor(
       fakeGithub(
         [summary("index.js")],
-        new Map([["index.js", patchOfParts(1)]])
-      )
+        new Map([["index.js", patchOfParts(1)]]),
+      ),
     );
 
     expect(await callTool(tools.emit_issue, issueOn("index.js"))).toEqual({

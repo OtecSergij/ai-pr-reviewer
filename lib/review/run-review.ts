@@ -80,7 +80,7 @@ export async function runReview({
     if (!gate.allowed) {
       log.info(
         { retryAfterMs: gate.retryAfterMs },
-        "review rejected: rate limited"
+        "review rejected: rate limited",
       );
       return rateLimitResponse(gate);
     }
@@ -90,7 +90,7 @@ export async function runReview({
       : createGithubAccess(
           githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT),
           pr,
-          signal
+          signal,
         );
 
     log.info(
@@ -102,7 +102,7 @@ export async function runReview({
         mockReview: env.MOCK_REVIEW,
         mockOffline: offlineGithub,
       },
-      "github access created"
+      "github access created",
     );
 
     const prMetadata = await gh.getPRMetadata();
@@ -110,11 +110,14 @@ export async function runReview({
     if (prMetadata.isPrivate && !githubPat) {
       log.info(
         { owner: pr.owner, repo: pr.repo, prNumber: pr.prNumber },
-        "review rejected: private PR without token"
+        "review rejected: private PR without token",
       );
       return new Response(
         "Reviewing a private PR needs your own GitHub token.",
-        { status: 403, headers: { "x-review-error": "private" satisfies ErrorKind } }
+        {
+          status: 403,
+          headers: { "x-review-error": "private" satisfies ErrorKind },
+        },
       );
     }
 
@@ -126,10 +129,10 @@ export async function runReview({
           prNumber: pr.prNumber,
           changedFiles: prMetadata.changedFiles,
         },
-        "review rejected: too many changed files"
+        "review rejected: too many changed files",
       );
       return tooManyFilesResponse(
-        `This PR is too large to inspect: it changes over ${RAW_CHANGED_FILES_CEILING} files.`
+        `This PR is too large to inspect: it changes over ${RAW_CHANGED_FILES_CEILING} files.`,
       );
     }
 
@@ -152,10 +155,10 @@ export async function runReview({
           changedFiles: prMetadata.changedFiles,
           reviewableFiles,
         },
-        "review rejected: too many reviewable files"
+        "review rejected: too many reviewable files",
       );
       return tooManyFilesResponse(
-        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer, not counting generated ones.`
+        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer, not counting generated ones.`,
       );
     }
   } catch (e) {
@@ -249,7 +252,7 @@ export async function runReview({
         const estimate = estimateInputTokens(
           streamMessages,
           tools,
-          candidates[i].maxOutputTokens
+          candidates[i].maxOutputTokens,
         );
         const budget = budgetCeiling(candidates[i].tpmBudget);
 
@@ -271,7 +274,7 @@ export async function runReview({
                 tpmBudget: candidates[i].tpmBudget,
                 maxOutputTokens: candidates[i].maxOutputTokens ?? null,
               },
-              "provider failover: estimate over budget"
+              "provider failover: estimate over budget",
             );
             writeFailover(i, OVER_BUDGET_VERDICT.reason);
             continue;
@@ -290,7 +293,7 @@ export async function runReview({
               budget,
               attempts: attemptTrail(),
             },
-            "review failed after providers exhausted"
+            "review failed after providers exhausted",
           );
 
           failChain(shown);
@@ -314,7 +317,7 @@ export async function runReview({
             maxRetries: candidates[i].maxRetries ?? null,
             mockError: env.MOCK_ERROR ?? null,
           },
-          "model attempt started"
+          "model attempt started",
         );
 
         const result = streamTextImpl({
@@ -324,7 +327,9 @@ export async function runReview({
           tools,
           maxOutputTokens: candidates[i].maxOutputTokens,
           maxRetries: candidates[i].maxRetries,
-          stopWhen: candidates[i].usesUserKey ? () => false : stepCountIs(MAX_STEPS),
+          stopWhen: candidates[i].usesUserKey
+            ? () => false
+            : stepCountIs(MAX_STEPS),
           prepareStep: inheritedTranscript
             ? ({ stepNumber }) =>
                 stepNumber === 0
@@ -338,7 +343,7 @@ export async function runReview({
           onStepFinish: (step) => {
             steps = step.stepNumber + 1;
             lastStepHadToolCalls = step.toolCalls.some(
-              (call) => call.providerExecuted !== true
+              (call) => call.providerExecuted !== true,
             );
             stepMessages.push(...step.response.messages);
             log.info(
@@ -354,7 +359,7 @@ export async function runReview({
                 totalTokens: step.usage.totalTokens ?? null,
                 finishReason: step.finishReason,
               },
-              "model step usage"
+              "model step usage",
             );
             writer.write({
               type: "data-usage",
@@ -395,7 +400,7 @@ export async function runReview({
                 finishReason,
                 steps,
               },
-              "provider failover: output cut short"
+              "provider failover: output cut short",
             );
 
             writeFailover(i, cut.reason);
@@ -425,7 +430,7 @@ export async function runReview({
                   issues: [...UIIssues.values()],
                   modelId: candidates[i].modelId,
                 },
-                log
+                log,
               );
             } catch (e) {
               log.error(
@@ -436,7 +441,7 @@ export async function runReview({
                   prNumber: pr.prNumber,
                   headSha,
                 },
-                "saveReview failed"
+                "saveReview failed",
               );
               saveFailed = true;
             }
@@ -473,7 +478,7 @@ export async function runReview({
           } else {
             log.info(
               { ...summary, reason: skipped ?? "save-failed" },
-              "review not saved"
+              "review not saved",
             );
           }
           return;
@@ -502,7 +507,7 @@ export async function runReview({
               reason: knownError.reason,
               retryAfterSec: knownError.retryAfterSec ?? null,
             },
-            "provider failover"
+            "provider failover",
           );
 
           writeFailover(i, knownError.reason);
@@ -523,7 +528,7 @@ export async function runReview({
             retryAfterSec: shown.retryAfterSec ?? null,
             attempts: attemptTrail(),
           },
-          "review failed after providers exhausted"
+          "review failed after providers exhausted",
         );
 
         failChain(shown);
@@ -555,7 +560,7 @@ function githubCredential(githubPat?: string): string {
 function saveSkipReason(
   isPrivate: boolean,
   aborted: boolean,
-  incomplete: boolean
+  incomplete: boolean,
 ): "private" | "aborted" | "truncated" | "mock" | null {
   if (isPrivate) return "private";
   if (aborted) return "aborted";
@@ -587,7 +592,7 @@ function sanitizeForHandoff(messages: ModelMessage[]): ModelMessage[] {
 
     if (message.role === "tool") {
       const content = message.content.filter(
-        (p) => p.type === "tool-result" && keptToolCallIds.has(p.toolCallId)
+        (p) => p.type === "tool-result" && keptToolCallIds.has(p.toolCallId),
       );
       if (content.length === 0) {
         continue;

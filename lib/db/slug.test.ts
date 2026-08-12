@@ -25,7 +25,7 @@ describe("reviewSlug", () => {
         repo: "next.js",
         prNumber: 123,
         headSha: "abcdef0",
-      })
+      }),
     );
   });
 

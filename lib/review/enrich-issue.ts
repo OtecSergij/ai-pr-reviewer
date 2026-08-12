@@ -51,7 +51,7 @@ function unwrapCodeFence(text: string): string {
   if (!fence) return text;
 
   const closingIdx = lines.findIndex(
-    (line, i) => i > 0 && isClosingFence(line, fence)
+    (line, i) => i > 0 && isClosingFence(line, fence),
   );
   if (closingIdx !== lines.length - 1) return text;
 
@@ -68,12 +68,12 @@ function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
 
   const hunk = parseUnifiedDiff(patch).find(
     ({ newStart, newEnd }) =>
-      newStart <= issue.line_end && newEnd >= issue.line_start
+      newStart <= issue.line_end && newEnd >= issue.line_start,
   );
   if (!hunk) return null;
 
   const targetIdxs = hunk.lines.flatMap((line, i) =>
-    inRange(line.newLineno) ? [i] : []
+    inRange(line.newLineno) ? [i] : [],
   );
 
   const [start, end] =
@@ -82,7 +82,7 @@ function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
           Math.max(0, targetIdxs[0] - WINDOW),
           Math.min(
             hunk.lines.length,
-            targetIdxs[targetIdxs.length - 1] + WINDOW + 1
+            targetIdxs[targetIdxs.length - 1] + WINDOW + 1,
           ),
         ]
       : [0, hunk.lines.length];
@@ -110,7 +110,7 @@ const noCodeLines = (): CodeLinesResult => ({
 async function buildCodeLines(
   gh: GithubAccess,
   issue: ModelIssue,
-  log: Logger
+  log: Logger,
 ): Promise<CodeLinesResult> {
   try {
     const patch = await gh.getDiff(issue.file);
@@ -132,17 +132,17 @@ export async function enrichIssue(
   gh: GithubAccess,
   repo: RepoContext,
   issue: ModelIssue,
-  log: Logger
+  log: Logger,
 ): Promise<Issue> {
   const { codeLines, patchFound, hunkMatched } = await buildCodeLines(
     gh,
     issue,
-    log
+    log,
   );
 
   const id = createHash("sha256")
     .update(
-      [issue.file, issue.line_start, issue.line_end, issue.title].join("\0")
+      [issue.file, issue.line_start, issue.line_end, issue.title].join("\0"),
     )
     .digest("hex");
 
@@ -157,7 +157,7 @@ export async function enrichIssue(
       hunkMatched,
       codeLines: codeLines.length,
     },
-    "issue enriched"
+    "issue enriched",
   );
 
   return {

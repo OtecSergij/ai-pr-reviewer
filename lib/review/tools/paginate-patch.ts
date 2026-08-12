@@ -16,7 +16,7 @@ const splitHunks = (patch: string): string[] => {
 
 export const splitPatch = (
   patch: string,
-  cap: number = PATCH_PART_CHARS
+  cap: number = PATCH_PART_CHARS,
 ): string[] => {
   const parts: string[] = [];
   let kept: string[] = [];

@@ -14,7 +14,7 @@ export async function saveReview(
     issues: Issue[];
     modelId: string;
   },
-  log: Logger
+  log: Logger,
 ): Promise<string> {
   const startedAt = Date.now();
   const slug = reviewSlug(input);
@@ -48,7 +48,7 @@ export async function saveReview(
       issues: input.issues.length,
       durationMs: Date.now() - startedAt,
     },
-    "review saved"
+    "review saved",
   );
 
   return slug;
