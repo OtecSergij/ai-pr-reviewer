@@ -1,8 +1,5 @@
-import {
-  GithubAccess,
-  GitHubApiError,
-  NotFoundError,
-} from "@/lib/github/octokit";
+import { GithubAccess, NotFoundError } from "@/lib/github/octokit";
+import { GitHubError } from "@/lib/github/error-base";
 import type { Issue } from "@/lib/review/issue";
 import { tool, UIMessageStreamWriter } from "ai";
 import { z } from "zod";
@@ -181,7 +178,7 @@ unavailable – couldn't read the file; see reason (e.g., too large, or the path
             return { content, size };
           } catch (e) {
             if (e instanceof NotFoundError) return { status: "not_found" };
-            if (e instanceof GitHubApiError)
+            if (e instanceof GitHubError)
               return { status: "unavailable", reason: e.message };
             throw e;
           }
@@ -213,7 +210,7 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
             };
           } catch (e) {
             if (e instanceof NotFoundError) return { status: "not_found" };
-            if (e instanceof GitHubApiError)
+            if (e instanceof GitHubError)
               return { status: "unavailable", reason: e.message };
             throw e;
           }

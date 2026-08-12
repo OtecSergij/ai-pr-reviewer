@@ -31,3 +31,11 @@ SEVERITY:
 OUTPUT FORMAT:
 For each issue: use tool emit_issue, never return plain text. Take the line number from the patch (the @@ hunk header). Don't invent it.
 `;
+
+export const HANDOFF_NUDGE = `The reviewer that wrote the notes above was interrupted mid-review. That transcript is an unfinished draft, not a completed investigation: its reading of this PR stopped part-way and every claim in it is unverified.
+
+You are taking over. Before you state any verdict:
+- call get_pr_files_summary, then read with get_diff every file you have not read yourself in this session;
+- treat any issue the previous reviewer reported as a claim to confirm against the diff you retrieved, not as a finding you inherit.
+
+Do not produce a verdict in this turn. Your next action must be a tool call.`;

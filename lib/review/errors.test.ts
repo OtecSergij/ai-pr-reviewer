@@ -7,10 +7,13 @@ import {
   errorToResponse,
   shownVerdict,
   OUTPUT_TRUNCATED_VERDICT,
+  OVER_BUDGET_VERDICT,
   STEPS_EXHAUSTED_VERDICT,
 } from "./errors";
+import { ttfbTimeoutError } from "@/lib/ai/provider-fetch";
 import {
   GitHubApiError,
+  GitHubTimeoutError,
   NotFoundError,
   SecondaryRateLimitError,
   UnauthorizedError,
@@ -230,6 +233,100 @@ describe("classifyFailure other statuses", () => {
   });
 });
 
+describe("classifyFailure TTFB timeouts", () => {
+  it("reads our synthetic 504 as a timeout that hops", () => {
+    expect(
+      classifyFailure(ttfbTimeoutError("https://api.groq.com/openai/v1/chat")),
+    ).toMatchObject({ hop: true, reason: "timeout" });
+  });
+
+  it("does not let the timeout reach the aborted branch", () => {
+    expect(
+      classifyFailure(ttfbTimeoutError("https://api.groq.com/x")).reason,
+    ).not.toBe("aborted");
+  });
+
+  it("leaves an unrelated 504 alone", () => {
+    expect(
+      classifyFailure(apiError({ statusCode: 504, isRetryable: true })),
+    ).toMatchObject({ reason: "server" });
+  });
+
+  it("survives the retry wrapper", () => {
+    const err = new RetryError({
+      message: "gave up",
+      reason: "maxRetriesExceeded",
+      errors: [ttfbTimeoutError("https://api.groq.com/x")],
+    });
+    expect(classifyFailure(err)).toMatchObject({ reason: "timeout" });
+  });
+});
+
+describe("classifyFailure Google RetryInfo", () => {
+  function resourceExhausted(retryDelay: unknown): string {
+    return JSON.stringify({
+      error: {
+        code: 429,
+        status: "RESOURCE_EXHAUSTED",
+        details: [
+          { "@type": "type.googleapis.com/google.rpc.QuotaFailure" },
+          { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay },
+        ],
+      },
+    });
+  }
+
+  it("reads the delay Gemini puts in the body instead of the header", () => {
+    expect(
+      classifyFailure(
+        apiError({ statusCode: 429, responseBody: resourceExhausted("36.3s") }),
+      ),
+    ).toMatchObject({ reason: "rate-limit", retryAfterSec: 37 });
+  });
+
+  it("reads the seconds/nanos form too", () => {
+    expect(
+      classifyFailure(
+        apiError({
+          statusCode: 429,
+          responseBody: resourceExhausted({ seconds: 12, nanos: 500_000_000 }),
+        }),
+      ).retryAfterSec,
+    ).toBe(13);
+  });
+
+  it("prefers the header when both are present", () => {
+    expect(
+      classifyFailure(
+        apiError({
+          statusCode: 429,
+          responseHeaders: { "retry-after": "5" },
+          responseBody: resourceExhausted("36.3s"),
+        }),
+      ).retryAfterSec,
+    ).toBe(5);
+  });
+
+  it("ignores a body that carries no usable delay", () => {
+    for (const body of [
+      "not json at all",
+      JSON.stringify({ error: { details: [] } }),
+      resourceExhausted("0s"),
+      resourceExhausted("later"),
+      JSON.stringify({
+        error: {
+          details: [{ "@type": "type.googleapis.com/google.rpc.QuotaFailure" }],
+        },
+      }),
+    ]) {
+      expect(
+        classifyFailure(apiError({ statusCode: 429, responseBody: body }))
+          .retryAfterSec,
+      ).toBeUndefined();
+    }
+  });
+});
+
 describe("classifyFailure context overflow", () => {
   it("maps context-overflow response bodies to context-overflow", () => {
     expect(
@@ -340,10 +437,15 @@ describe("errorKindForReason", () => {
     expect(errorKindForReason("provider-limit")).toBe("provider-quota");
   });
 
+  it("sends a transcript no provider can take to the quota card, not the size card", () => {
+    expect(errorKindForReason("over-budget")).toBe("provider-quota");
+  });
+
   it("leaves the remaining reasons on the review card", () => {
     for (const reason of [
       "overloaded",
       "server",
+      "timeout",
       "output-truncated",
       "steps-exhausted",
       "unavailable",
@@ -415,5 +517,27 @@ describe("cut-short verdicts", () => {
   it("does not claim the PR is too large", () => {
     expect(OUTPUT_TRUNCATED_VERDICT.message).not.toBe(TOO_LARGE_MESSAGE);
     expect(STEPS_EXHAUSTED_VERDICT.message).not.toBe(TOO_LARGE_MESSAGE);
+  });
+});
+
+describe("the over-budget verdict", () => {
+  it("hops, so a pre-flight skip is a divider and not the end of the run", () => {
+    expect(OVER_BUDGET_VERDICT).toMatchObject({
+      hop: true,
+      reason: "over-budget",
+    });
+  });
+
+  it("blames the request size rather than the pull request", () => {
+    expect(OVER_BUDGET_VERDICT.message).not.toBe(TOO_LARGE_MESSAGE);
+    expect(OVER_BUDGET_VERDICT.message).toContain("smaller pull request");
+  });
+});
+
+describe("GitHub timeouts on the pre-stream path", () => {
+  it("answers 504 with the GitHub card rather than a failed review", () => {
+    const res = errorToResponse(new GitHubTimeoutError("PR o/r#1", 15_000));
+    expect(res?.status).toBe(504);
+    expect(res?.headers.get("x-review-error")).toBe("github");
   });
 });

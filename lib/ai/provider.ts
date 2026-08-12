@@ -10,6 +10,7 @@ import {
 } from "ai";
 import type { Logger } from "pino";
 import { env } from "@/lib/env";
+import { tracedFetch } from "@/lib/ai/provider-fetch";
 
 export type ProviderName = "cerebras" | "groq" | "google" | "anthropic";
 
@@ -21,6 +22,7 @@ export type ModelCandidate = {
   contextWindow: number;
   tpmBudget: number;
   maxOutputTokens?: number;
+  maxRetries?: number;
 };
 
 export function selectModels(
@@ -28,8 +30,8 @@ export function selectModels(
   log: Logger
 ): ModelCandidate[] {
   const candidates = anthropicKey
-    ? userKeyChain(anthropicKey)
-    : serverKeyChain();
+    ? userKeyChain(anthropicKey, log)
+    : serverKeyChain(log);
 
   log.info(
     {
@@ -42,10 +44,11 @@ export function selectModels(
   return candidates;
 }
 
-function userKeyChain(anthropicKey: string): ModelCandidate[] {
+function userKeyChain(anthropicKey: string, log: Logger): ModelCandidate[] {
   const anthropic = createAnthropic({
     apiKey: anthropicKey,
     baseURL: "https://api.anthropic.com/v1",
+    fetch: tracedFetch("anthropic", log),
   });
 
   return [
@@ -60,11 +63,18 @@ function userKeyChain(anthropicKey: string): ModelCandidate[] {
   ];
 }
 
-function serverKeyChain(): ModelCandidate[] {
-  const cerebras = createCerebras({ apiKey: env.CEREBRAS_API_KEY });
-  const groq = createGroq({ apiKey: env.GROQ_API_KEY });
+function serverKeyChain(log: Logger): ModelCandidate[] {
+  const cerebras = createCerebras({
+    apiKey: env.CEREBRAS_API_KEY,
+    fetch: tracedFetch("cerebras", log),
+  });
+  const groq = createGroq({
+    apiKey: env.GROQ_API_KEY,
+    fetch: tracedFetch("groq", log),
+  });
   const google = createGoogleGenerativeAI({
     apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
+    fetch: tracedFetch("google", log),
   });
 
   return [
@@ -75,6 +85,7 @@ function serverKeyChain(): ModelCandidate[] {
       usesUserKey: false,
       contextWindow: 131_072,
       tpmBudget: 8_000,
+      maxRetries: 0,
     },
     {
       model: cerebras("gpt-oss-120b"),
@@ -84,6 +95,7 @@ function serverKeyChain(): ModelCandidate[] {
       contextWindow: 65_536,
       tpmBudget: 30_000,
       maxOutputTokens: 6_000,
+      maxRetries: 0,
     },
     {
       model: wrapLanguageModel({

@@ -1,5 +1,6 @@
 import { RequestError } from "@octokit/request-error";
 import { GitHubError } from "../error-base";
+import { GITHUB_TIMEOUT_MS, TIMEOUT_ERROR_NAME } from "./timeboxed-fetch";
 
 export class NotFoundError extends GitHubError {
   readonly code = "NOT_FOUND";
@@ -54,6 +55,20 @@ export class SecondaryRateLimitError extends GitHubError {
   }
 }
 
+export class GitHubTimeoutError extends GitHubError {
+  readonly code = "TIMEOUT";
+  constructor(
+    public readonly resource: string,
+    public readonly timeoutMs: number,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `GitHub did not answer for ${resource} within ${timeoutMs}ms`,
+      options,
+    );
+  }
+}
+
 export class GitHubApiError extends GitHubError {
   readonly code = "GITHUB_API_ERROR";
   constructor(
@@ -71,6 +86,10 @@ export function translateOctokitError(err: unknown, resource: string): never {
   }
   if (!(err instanceof RequestError)) {
     throw err;
+  }
+
+  if (isTimeoutCause(err)) {
+    throw new GitHubTimeoutError(resource, GITHUB_TIMEOUT_MS, { cause: err });
   }
 
   const { status, response } = err;
@@ -114,6 +133,16 @@ export function translateOctokitError(err: unknown, resource: string): never {
   }
 
   throw new GitHubApiError(status, bodyMessage, { cause: err });
+}
+
+function isTimeoutCause(err: RequestError): boolean {
+  const cause: unknown = err.cause;
+  return (
+    typeof cause === "object" &&
+    cause !== null &&
+    "name" in cause &&
+    (cause as { name?: unknown }).name === TIMEOUT_ERROR_NAME
+  );
 }
 
 function readHeader(

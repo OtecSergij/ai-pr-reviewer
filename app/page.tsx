@@ -38,6 +38,7 @@ export default function Home() {
     totalTokens,
     shareSlug,
     requestId,
+    stallNotice,
     run,
     stop,
     reset,
@@ -139,7 +140,9 @@ export default function Home() {
             />
           ) : null}
 
-          {running ? <AgentConsole transcript={transcript} /> : null}
+          {running ? (
+            <AgentConsole transcript={transcript} notice={stallNotice} />
+          ) : null}
 
           {finished ? (
             <SummaryCard

@@ -1,6 +1,7 @@
 import "server-only";
 import { RetryError, APICallError } from "ai";
 import { GitHubError, type GitHubErrorCode } from "@/lib/github/error-base";
+import { isTtfbTimeout } from "@/lib/ai/provider-fetch";
 import type { ProviderName } from "@/lib/ai/provider";
 import type { ErrorKind } from "@/lib/review/transcript";
 
@@ -18,14 +19,20 @@ const TOO_LARGE_MESSAGE =
   "The diff is too large for the model's context window.";
 const CUT_SHORT_MESSAGE =
   "The review was cut short before it finished. Please try again.";
+const TIMEOUT_MESSAGE =
+  "The review service took too long to respond. Please try again.";
+const OVER_BUDGET_MESSAGE =
+  "This review grew past what the free providers accept in a single request. Please try again, or review a smaller pull request.";
 
 const MAX_USER_MESSAGE_CHARS = 240;
 
 export type FailureReason =
   | "rate-limit"
   | "provider-limit"
+  | "over-budget"
   | "overloaded"
   | "server"
+  | "timeout"
   | "context-overflow"
   | "output-truncated"
   | "steps-exhausted"
@@ -70,12 +77,67 @@ function isAbort(error: unknown): boolean {
   );
 }
 
-function retryAfter(error: APICallError): { retryAfterSec?: number } {
+function usableSeconds(seconds: number): number | undefined {
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return Math.ceil(seconds);
+}
+
+function retryAfterHeader(error: APICallError): number | undefined {
   const raw = error.responseHeaders?.["retry-after"];
-  if (raw === undefined) return {};
-  const seconds = Number(raw.trim());
-  if (!Number.isFinite(seconds) || seconds <= 0) return {};
-  return { retryAfterSec: Math.ceil(seconds) };
+  if (raw === undefined) return undefined;
+  return usableSeconds(Number(raw.trim()));
+}
+
+function retryInfoDetails(parsed: unknown): unknown[] {
+  if (typeof parsed !== "object" || parsed === null) return [];
+  const root = parsed as { error?: unknown; details?: unknown };
+  const nested =
+    typeof root.error === "object" && root.error !== null
+      ? (root.error as { details?: unknown }).details
+      : undefined;
+  const details = Array.isArray(nested) ? nested : root.details;
+  return Array.isArray(details) ? details : [];
+}
+
+function retryDelayOf(detail: unknown): number | undefined {
+  if (typeof detail !== "object" || detail === null) return undefined;
+  const record = detail as Record<string, unknown>;
+  if (!String(record["@type"] ?? "").includes("RetryInfo")) return undefined;
+
+  const delay = record.retryDelay;
+
+  if (typeof delay === "string")
+    return usableSeconds(Number(delay.trim().replace(/s$/, "")));
+
+  if (typeof delay === "object" && delay !== null) {
+    const { seconds, nanos } = delay as { seconds?: unknown; nanos?: unknown };
+    return usableSeconds(Number(seconds ?? 0) + Number(nanos ?? 0) / 1e9);
+  }
+
+  return undefined;
+}
+
+function retryAfterBody(error: APICallError): number | undefined {
+  if (!error.responseBody) return undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(error.responseBody);
+  } catch {
+    return undefined;
+  }
+
+  for (const detail of retryInfoDetails(parsed)) {
+    const seconds = retryDelayOf(detail);
+    if (seconds !== undefined) return seconds;
+  }
+
+  return undefined;
+}
+
+function retryAfter(error: APICallError): { retryAfterSec?: number } {
+  const retryAfterSec = retryAfterHeader(error) ?? retryAfterBody(error);
+  return retryAfterSec === undefined ? {} : { retryAfterSec };
 }
 
 function classifyApiError(
@@ -84,6 +146,8 @@ function classifyApiError(
 ): FailureVerdict {
   const status = error.statusCode;
 
+  if (isTtfbTimeout(error))
+    return { hop: true, reason: "timeout", message: TIMEOUT_MESSAGE };
   if (status === 401)
     return userKey
       ? { hop: false, reason: "auth", message: INVALID_KEY_MESSAGE }
@@ -155,6 +219,12 @@ export const STEPS_EXHAUSTED_VERDICT: FailureVerdict = {
   message: CUT_SHORT_MESSAGE,
 };
 
+export const OVER_BUDGET_VERDICT: FailureVerdict = {
+  hop: true,
+  reason: "over-budget",
+  message: OVER_BUDGET_MESSAGE,
+};
+
 export function shownVerdict(
   verdicts: readonly FailureVerdict[],
 ): FailureVerdict {
@@ -174,8 +244,10 @@ export function shownVerdict(
 const KIND_BY_REASON: Record<FailureReason, ErrorKind> = {
   "rate-limit": "provider-quota",
   "provider-limit": "provider-quota",
+  "over-budget": "provider-quota",
   overloaded: "review",
   server: "review",
+  timeout: "review",
   "context-overflow": "too-many-files",
   "output-truncated": "review",
   "steps-exhausted": "review",
@@ -207,6 +279,7 @@ const STATUS_BY_GITHUB_CODE: Record<GitHubErrorCode, number> = {
   NOT_FOUND: 404,
   RATE_LIMIT: 429,
   SECONDARY_RATE_LIMIT: 429,
+  TIMEOUT: 504,
   GITHUB_API_ERROR: 502,
 };
 
@@ -217,6 +290,7 @@ const KIND_BY_GITHUB_CODE: Record<GitHubErrorCode, ErrorKind> = {
   NOT_FOUND: "load",
   RATE_LIMIT: "rate-limit",
   SECONDARY_RATE_LIMIT: "rate-limit",
+  TIMEOUT: "github",
   GITHUB_API_ERROR: "github",
 };
 

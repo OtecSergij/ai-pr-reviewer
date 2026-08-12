@@ -10,6 +10,7 @@ import { toolLabel, statusLabel, providerLabel, reasonLabel } from "./transcript
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
   mode?: "live" | "trace";
+  notice?: string | null;
 };
 
 function isConsoleEntry(entry: TranscriptEntry): boolean {
@@ -25,6 +26,7 @@ function isConsoleEntry(entry: TranscriptEntry): boolean {
 export const AgentConsole = memo(function AgentConsole({
   transcript,
   mode = "live",
+  notice = null,
 }: AgentConsoleProps) {
   const trace = mode === "trace";
   const [open, setOpen] = useState(false);
@@ -76,6 +78,15 @@ export const AgentConsole = memo(function AgentConsole({
           {open ? "Collapse" : "Expand"}
         </button>
       </div>
+
+      {!trace && notice ? (
+        <div
+          role="status"
+          className="border-b border-[#f0e3c8] bg-[#fffbf0] px-3.5 py-2 font-mono text-[11.5px] text-[#9a6700]"
+        >
+          {notice}
+        </div>
+      ) : null}
 
       {bodyShown ? (
         <div

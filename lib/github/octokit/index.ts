@@ -12,6 +12,7 @@ import {
 import { getFileContents, type FileContents } from "./get-file-contents";
 import { listDirectory, type DirectoryEntry } from "./list-directory";
 import { GitHubApiError } from "./errors";
+import { timeboxedFetch } from "./timeboxed-fetch";
 
 export type {
   PRMetadata,
@@ -26,6 +27,7 @@ export {
   ForbiddenError,
   RateLimitError,
   SecondaryRateLimitError,
+  GitHubTimeoutError,
   GitHubApiError,
 } from "./errors";
 
@@ -55,8 +57,16 @@ const RETRY_OPTS = {
   },
 };
 
-export function createGithubAccess(token: string | null, pr: PRRef): GithubAccess {
-  const client = token ? new Octokit({ auth: token }) : new Octokit();
+export function createGithubAccess(
+  token: string | null,
+  pr: PRRef,
+  signal?: AbortSignal
+): GithubAccess {
+  const request = { fetch: timeboxedFetch(), signal };
+  const client = token
+    ? new Octokit({ auth: token, request })
+    : new Octokit({ request });
+  const retryOpts = { ...RETRY_OPTS, signal };
 
   let metadataPromise: Promise<PRMetadata> | null = null;
   let filesPromise: Promise<Map<string, PRFile>> | null = null;
@@ -64,14 +74,14 @@ export function createGithubAccess(token: string | null, pr: PRRef): GithubAcces
 
   const ensureMetadata = (): Promise<PRMetadata> => {
     if (!metadataPromise) {
-      metadataPromise = withRetry(() => getPRMetadata(client, pr), RETRY_OPTS);
+      metadataPromise = withRetry(() => getPRMetadata(client, pr), retryOpts);
     }
     return metadataPromise;
   };
 
   const ensureFiles = (): Promise<Map<string, PRFile>> => {
     if (!filesPromise) {
-      filesPromise = withRetry(() => getPRFiles(client, pr), RETRY_OPTS).then(
+      filesPromise = withRetry(() => getPRFiles(client, pr), retryOpts).then(
         (arr) => new Map(arr.map((f) => [f.filename, f]))
       );
     }
@@ -100,7 +110,7 @@ export function createGithubAccess(token: string | null, pr: PRRef): GithubAcces
               path,
               ref,
             }),
-          RETRY_OPTS
+          retryOpts
         );
         cached.catch(() => {
           if (fileContentsCache.get(key) === cached) {
@@ -120,7 +130,7 @@ export function createGithubAccess(token: string | null, pr: PRRef): GithubAcces
             path,
             ref,
           }),
-        RETRY_OPTS
+        retryOpts
       ),
   };
 }
@@ -131,19 +141,40 @@ async function withRetry<T>(
     retries: number;
     baseMs: number;
     isRetryable: (e: unknown) => boolean;
+    signal?: AbortSignal;
   }
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
+    options.signal?.throwIfAborted();
+
     try {
       return await fn();
     } catch (e) {
-      if (!options.isRetryable(e) || attempt >= options.retries) {
+      if (
+        options.signal?.aborted ||
+        !options.isRetryable(e) ||
+        attempt >= options.retries
+      ) {
         throw e;
       }
 
       const expo = options.baseMs * 2 ** attempt;
 
-      await new Promise((r) => setTimeout(r, Math.random() * expo));
+      await sleep(Math.random() * expo, options.signal);
     }
   }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, ms);
+
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    }
+
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }

@@ -5,6 +5,7 @@ export type GitHubErrorCode =
   | "FORBIDDEN"
   | "RATE_LIMIT"
   | "SECONDARY_RATE_LIMIT"
+  | "TIMEOUT"
   | "GITHUB_API_ERROR";
 
 export abstract class GitHubError extends Error {

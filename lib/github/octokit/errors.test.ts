@@ -7,6 +7,7 @@ import {
   ForbiddenError,
   RateLimitError,
   SecondaryRateLimitError,
+  GitHubTimeoutError,
   GitHubApiError,
 } from "./errors";
 import { GitHubError } from "../error-base";
@@ -125,6 +126,54 @@ describe("translateOctokitError status mapping", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(GitHubApiError);
       expect((err as GitHubApiError).status).toBe(502);
+    }
+  });
+});
+
+describe("translateOctokitError timeouts", () => {
+  function timedOut(): RequestError {
+    const err = new RequestError("The operation was aborted due to timeout", 500, {
+      request: { method: "GET", url: "https://api.github.com/x", headers: {} },
+    });
+    err.cause = new DOMException(
+      "The operation was aborted due to timeout",
+      "TimeoutError",
+    );
+    return err;
+  }
+
+  it("reads the aborted-by-timeout cause instead of the 500 Octokit invents", () => {
+    try {
+      translateOctokitError(timedOut(), "pull #7");
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(GitHubTimeoutError);
+      expect((err as GitHubTimeoutError).resource).toBe("pull #7");
+      expect((err as GitHubTimeoutError).code).toBe("TIMEOUT");
+    }
+  });
+
+  it("keeps a timeout out of the retryable 5xx class", () => {
+    try {
+      translateOctokitError(timedOut(), "pr");
+      expect.unreachable();
+    } catch (err) {
+      expect(err).not.toBeInstanceOf(GitHubApiError);
+    }
+  });
+
+  it("leaves an ordinary transport 500 retryable", () => {
+    const err = new RequestError("ECONNRESET", 500, {
+      request: { method: "GET", url: "https://api.github.com/x", headers: {} },
+    });
+    err.cause = new TypeError("fetch failed");
+
+    try {
+      translateOctokitError(err, "pr");
+      expect.unreachable();
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(GitHubApiError);
+      expect((thrown as GitHubApiError).status).toBe(500);
     }
   });
 });

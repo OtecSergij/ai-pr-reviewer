@@ -15,8 +15,10 @@ import {
   type PRFileSummary,
 } from "@/lib/github/octokit";
 import { createReviewTools } from "@/lib/review/tools/review-tools";
-import { SYSTEM } from "@/lib/review/system-prompt";
+import { READING_TOOL_NAMES } from "@/lib/review/tools/tool-names";
+import { HANDOFF_NUDGE, SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
+import { budgetCeiling, estimateInputTokens } from "@/lib/review/budget";
 import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
@@ -27,7 +29,9 @@ import {
   errorToResponse,
   shownVerdict,
   OUTPUT_TRUNCATED_VERDICT,
+  OVER_BUDGET_VERDICT,
   STEPS_EXHAUSTED_VERDICT,
+  type FailureReason,
   type FailureVerdict,
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
@@ -84,7 +88,8 @@ export async function runReview({
       ? createFixtureGithubAccess(pr)
       : createGithubAccess(
           githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT),
-          pr
+          pr,
+          signal
         );
 
     log.info(
@@ -170,6 +175,43 @@ export async function runReview({
       const tools = createReviewTools(gh, UIIssues, repo, writer, log);
       const streamMessages: ModelMessage[] = [...messages];
       const verdicts: FailureVerdict[] = [];
+      let inheritedTranscript = false;
+
+      const inherit = (stepMessages: ModelMessage[]) => {
+        streamMessages.push(...sanitizeForHandoff(stepMessages), {
+          role: "user",
+          content: HANDOFF_NUDGE,
+        });
+        inheritedTranscript = true;
+      };
+
+      const attemptTrail = () =>
+        verdicts.map((verdict) => ({
+          provider: verdict.provider ?? null,
+          modelId: verdict.modelId ?? null,
+          reason: verdict.reason,
+        }));
+
+      const writeFailover = (index: number, reason: FailureReason) => {
+        writer.write({
+          type: "data-failover",
+          transient: true,
+          data: {
+            from: candidates[index].provider,
+            to: candidates[index + 1].provider,
+            reason,
+          },
+        });
+      };
+
+      const failChain = (shown: FailureVerdict) => {
+        writer.write({
+          type: "data-errorKind",
+          transient: true,
+          data: { kind: errorKindForReason(shown.reason) },
+        });
+        writer.write({ type: "error", errorText: shown.message });
+      };
 
       for (let i = 0; i < candidates.length; i++) {
         writer.write({
@@ -186,6 +228,56 @@ export async function runReview({
           transient: true,
         });
 
+        const estimate = estimateInputTokens(
+          streamMessages,
+          tools,
+          candidates[i].maxOutputTokens
+        );
+        const budget = budgetCeiling(candidates[i].tpmBudget);
+
+        if (estimate > budget) {
+          verdicts.push({
+            ...OVER_BUDGET_VERDICT,
+            provider: candidates[i].provider,
+            modelId: candidates[i].modelId,
+          });
+
+          if (i < candidates.length - 1) {
+            log.warn(
+              {
+                from: candidates[i].provider,
+                to: candidates[i + 1].provider,
+                reason: OVER_BUDGET_VERDICT.reason,
+                estimate,
+                budget,
+                tpmBudget: candidates[i].tpmBudget,
+                maxOutputTokens: candidates[i].maxOutputTokens ?? null,
+              },
+              "provider failover: estimate over budget"
+            );
+            writeFailover(i, OVER_BUDGET_VERDICT.reason);
+            continue;
+          }
+
+          const shown = shownVerdict(verdicts);
+
+          log.error(
+            {
+              reason: OVER_BUDGET_VERDICT.reason,
+              shownReason: shown.reason,
+              shownProvider: shown.provider ?? null,
+              provider: candidates[i].modelId,
+              estimate,
+              budget,
+              attempts: attemptTrail(),
+            },
+            "review failed after providers exhausted"
+          );
+
+          failChain(shown);
+          return;
+        }
+
         let failure: unknown = null;
         let finishReason: FinishReason | null = null;
         let steps = 0;
@@ -198,6 +290,9 @@ export async function runReview({
             provider: candidates[i].provider,
             modelId: candidates[i].modelId,
             usesUserKey: candidates[i].usesUserKey,
+            inputEstimate: estimate,
+            budget,
+            maxRetries: candidates[i].maxRetries ?? null,
             mockError: env.MOCK_ERROR ?? null,
           },
           "model attempt started"
@@ -209,7 +304,14 @@ export async function runReview({
           messages: streamMessages,
           tools,
           maxOutputTokens: candidates[i].maxOutputTokens,
+          maxRetries: candidates[i].maxRetries,
           stopWhen: candidates[i].usesUserKey ? () => false : stepCountIs(MAX_STEPS),
+          prepareStep: inheritedTranscript
+            ? ({ stepNumber }) =>
+                stepNumber === 0
+                  ? { toolChoice: "required", activeTools: READING_TOOL_NAMES }
+                  : undefined
+            : undefined,
           abortSignal: signal,
           onError: ({ error }) => {
             failure = error;
@@ -277,22 +379,14 @@ export async function runReview({
               "provider failover: output cut short"
             );
 
-            writer.write({
-              type: "data-failover",
-              transient: true,
-              data: {
-                from: candidates[i].provider,
-                to: candidates[i + 1].provider,
-                reason: cut.reason,
-              },
-            });
+            writeFailover(i, cut.reason);
 
             verdicts.push({
               ...cut,
               provider: candidates[i].provider,
               modelId: candidates[i].modelId,
             });
-            streamMessages.push(...sanitizeForHandoff(stepMessages));
+            inherit(stepMessages);
             continue;
           }
 
@@ -391,17 +485,8 @@ export async function runReview({
             "provider failover"
           );
 
-          writer.write({
-            type: "data-failover",
-            transient: true,
-            data: {
-              from: candidates[i].provider,
-              to: candidates[i + 1].provider,
-              reason: knownError.reason,
-            },
-          });
-
-          streamMessages.push(...sanitizeForHandoff(stepMessages));
+          writeFailover(i, knownError.reason);
+          inherit(stepMessages);
           continue;
         }
 
@@ -415,21 +500,12 @@ export async function runReview({
             shownProvider: shown.provider ?? null,
             provider: candidates[i].modelId,
             retryAfterSec: shown.retryAfterSec ?? null,
-            attempts: verdicts.map((verdict) => ({
-              provider: verdict.provider ?? null,
-              modelId: verdict.modelId ?? null,
-              reason: verdict.reason,
-            })),
+            attempts: attemptTrail(),
           },
           "review failed after providers exhausted"
         );
 
-        writer.write({
-          type: "data-errorKind",
-          transient: true,
-          data: { kind: errorKindForReason(shown.reason) },
-        });
-        writer.write({ type: "error", errorText: shown.message });
+        failChain(shown);
         return;
       }
     },

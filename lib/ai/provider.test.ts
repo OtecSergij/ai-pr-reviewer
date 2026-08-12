@@ -95,3 +95,16 @@ describe.each(chains)("$name chain ordering", ({ key }) => {
     }
   });
 });
+
+describe.each(chains)("$name chain retries", ({ key }) => {
+  it("retries only where a retry is the last resort", () => {
+    const chain = selectModels(key, log);
+    const last = chain[chain.length - 1];
+
+    for (const candidate of chain.slice(0, -1)) {
+      expect(candidate.maxRetries).toBe(0);
+    }
+
+    expect(last.maxRetries).toBeUndefined();
+  });
+});

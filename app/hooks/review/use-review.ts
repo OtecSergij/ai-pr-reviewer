@@ -26,6 +26,13 @@ import {
 
 const REVEAL_CHARS_PER_SECOND = 200;
 const NOMINAL_FRAME_MS = 1000 / 60;
+const STALL_TICK_MS = 1000;
+const STALL_NOTICE_MS = 8_000;
+const STALL_ESCALATION_MS = 30_000;
+const STALL_NOTICES = [
+  "Waiting on the provider — free-tier responses can take a while.",
+  "Still waiting — a rate-limited provider can pause for up to a minute before retrying.",
+] as const;
 
 export type ReviewRunOptions = {
   anthropicKey?: string;
@@ -78,6 +85,7 @@ export function useReview() {
   const [totalTokens, setTotalTokens] = useState(0);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [stallLevel, setStallLevel] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
   const transcriptRef = useRef<TranscriptEntry[]>([]);
@@ -85,6 +93,7 @@ export function useReview() {
   const rafRef = useRef<number | null>(null);
   const revealedRef = useRef(0);
   const lastFrameAtRef = useRef<number | null>(null);
+  const lastNetworkAtRef = useRef<number | null>(null);
 
   const scheduleCommit = useCallback(() => {
     if (rafRef.current != null) return;
@@ -126,6 +135,8 @@ export function useReview() {
   const clearReviewState = useCallback(() => {
     transcriptRef.current = [];
     flushTranscript();
+    lastNetworkAtRef.current = null;
+    setStallLevel(0);
     toolEntriesRef.current = [];
     setToolEntries([]);
     setIssues([]);
@@ -146,6 +157,7 @@ export function useReview() {
 
       clearReviewState();
       setStatus("running");
+      lastNetworkAtRef.current = Date.now();
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -187,6 +199,7 @@ export function useReview() {
 
         while (true) {
           const { value, done } = await reader.read();
+          lastNetworkAtRef.current = Date.now();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -402,6 +415,20 @@ export function useReview() {
     setStatus("idle");
   }, [clearReviewState]);
 
+  useEffect(() => {
+    if (status !== "running") return;
+
+    const timer = setInterval(() => {
+      const since = lastNetworkAtRef.current;
+      const idleMs = since === null ? 0 : Date.now() - since;
+      setStallLevel(
+        idleMs >= STALL_ESCALATION_MS ? 2 : idleMs >= STALL_NOTICE_MS ? 1 : 0
+      );
+    }, STALL_TICK_MS);
+
+    return () => clearInterval(timer);
+  }, [status]);
+
   useEffect(
     () => () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
@@ -427,5 +454,9 @@ export function useReview() {
     totalTokens,
     shareSlug,
     requestId,
+    stallNotice:
+      status === "running" && stallLevel > 0
+        ? STALL_NOTICES[stallLevel - 1]
+        : null,
   };
 }
