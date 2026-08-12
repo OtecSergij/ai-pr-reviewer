@@ -12,12 +12,17 @@ import {
 } from "./errors";
 import { ttfbTimeoutError } from "@/lib/ai/provider-fetch";
 import {
+  ForbiddenError,
   GitHubApiError,
   GitHubTimeoutError,
   NotFoundError,
+  RateLimitError,
   SecondaryRateLimitError,
   UnauthorizedError,
 } from "@/lib/github/octokit/errors";
+import { InvalidPRUrl } from "@/lib/github/parse-url";
+import type { GitHubError, GitHubErrorCode } from "@/lib/github/error-base";
+import type { ErrorKind } from "@/lib/review/transcript";
 
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
@@ -539,5 +544,102 @@ describe("GitHub timeouts on the pre-stream path", () => {
     const res = errorToResponse(new GitHubTimeoutError("PR o/r#1", 15_000));
     expect(res?.status).toBe(504);
     expect(res?.headers.get("x-review-error")).toBe("github");
+  });
+});
+
+const GITHUB_FAILURES: Record<
+  GitHubErrorCode,
+  { status: number; kind: ErrorKind; error: () => GitHubError }
+> = {
+  INVALID_PR_URL: {
+    status: 400,
+    kind: "load",
+    error: () => new InvalidPRUrl("not a pull request URL", "example.com"),
+  },
+  UNAUTHORIZED: {
+    status: 401,
+    kind: "load",
+    error: () => new UnauthorizedError(),
+  },
+  FORBIDDEN: {
+    status: 403,
+    kind: "load",
+    error: () => new ForbiddenError("Resource not accessible by integration"),
+  },
+  NOT_FOUND: {
+    status: 404,
+    kind: "load",
+    error: () => new NotFoundError("PR vercel/ms#17"),
+  },
+  RATE_LIMIT: {
+    status: 429,
+    kind: "rate-limit",
+    error: () => new RateLimitError(new Date("2026-08-12T09:00:00.000Z")),
+  },
+  SECONDARY_RATE_LIMIT: {
+    status: 429,
+    kind: "rate-limit",
+    error: () => new SecondaryRateLimitError(60),
+  },
+  TIMEOUT: {
+    status: 504,
+    kind: "github",
+    error: () => new GitHubTimeoutError("PR vercel/ms#17", 15_000),
+  },
+  GITHUB_API_ERROR: {
+    status: 502,
+    kind: "github",
+    error: () => new GitHubApiError(502, "Bad Gateway"),
+  },
+};
+
+const githubFailures = Object.entries(GITHUB_FAILURES).map(([code, row]) => ({
+  code,
+  ...row,
+}));
+
+describe("errorToResponse over every GitHub failure the app can raise", () => {
+  it.each(githubFailures)(
+    "answers $code with $status and the $kind card",
+    ({ status, kind, error }) => {
+      const response = errorToResponse(error());
+
+      expect(response?.status).toBe(status);
+      expect(response?.headers.get("x-review-error")).toBe(kind);
+    }
+  );
+
+  it.each(githubFailures)("says out loud what went wrong on $code", async ({ error }) => {
+    const raised = error();
+
+    await expect(errorToResponse(raised)?.text()).resolves.toBe(
+      errorToMessage(raised)
+    );
+  });
+
+  it("keeps the two tables reading the same failure code", () => {
+    for (const { code, error } of githubFailures) {
+      expect(error().code).toBe(code);
+    }
+  });
+});
+
+describe("errorToMessage outside GitHub's failures", () => {
+  it("gives a model failure the generic server-side wording", () => {
+    expect(errorToMessage(new Error("ECONNRESET"))).toBe(
+      "The review couldn't be completed because of a problem on our end. Please try again later."
+    );
+  });
+
+  it("keeps a provider's own words out of the message it shows", () => {
+    expect(
+      errorToMessage(apiError({ statusCode: 429, message: "org quota exceeded" }))
+    ).toBe(TRANSIENT_MESSAGE);
+  });
+
+  it("collapses a multi-line GitHub message into one line", () => {
+    expect(errorToMessage(new GitHubApiError(502, "Bad\n\n  Gateway"))).toBe(
+      "GitHub API error (502): Bad Gateway"
+    );
   });
 });

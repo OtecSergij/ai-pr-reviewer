@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   countToolCalls,
   isDegenerateText,
+  isErrorKind,
   partiallyReadFiles,
   patchPartOf,
   revealTranscript,
+  toolPath,
+  totalTextChars,
   type TranscriptEntry,
 } from "./transcript";
 import { REVIEW_TOOL_NAMES } from "./tools/tool-names";
@@ -218,5 +221,144 @@ describe("partiallyReadFiles", () => {
     };
 
     expect(partiallyReadFiles([entry])).toEqual(new Set());
+  });
+});
+
+describe("totalTextChars", () => {
+  const toolEntry: TranscriptEntry = {
+    kind: "tool",
+    toolCallId: "call-1",
+    toolName: REVIEW_TOOL_NAMES.getDiff,
+    input: { filename: "index.js" },
+    outcome: "ok",
+  };
+
+  it("counts nothing for an empty transcript", () => {
+    expect(totalTextChars([])).toBe(0);
+  });
+
+  it("adds up text and reasoning alike, since both are revealed", () => {
+    expect(
+      totalTextChars([
+        { kind: "text", text: "abcd" },
+        { kind: "reasoning", text: "ef" },
+      ])
+    ).toBe(6);
+  });
+
+  it("counts no characters for the entries reveal never trims", () => {
+    expect(
+      totalTextChars([
+        toolEntry,
+        { kind: "failover", from: "groq", to: "cerebras", reason: "server" },
+      ])
+    ).toBe(0);
+  });
+
+  it("agrees with the budget at which reveal stops trimming", () => {
+    const entries: TranscriptEntry[] = [
+      { kind: "text", text: "abcd" },
+      toolEntry,
+      { kind: "reasoning", text: "ef" },
+    ];
+
+    expect(revealTranscript(entries, totalTextChars(entries))).toEqual(entries);
+  });
+});
+
+describe("toolPath", () => {
+  const call = (
+    toolName: string,
+    input: unknown
+  ): TranscriptEntry => ({
+    kind: "tool",
+    toolCallId: "call-1",
+    toolName,
+    input,
+    outcome: "ok",
+  });
+
+  it("reads a diff request as a file", () => {
+    expect(
+      toolPath(call(REVIEW_TOOL_NAMES.getDiff, { filename: "index.js" }))
+    ).toEqual({ path: "index.js", type: "file" });
+  });
+
+  it("reads a contents request as a file", () => {
+    expect(
+      toolPath(call(REVIEW_TOOL_NAMES.getFileContents, { path: "index.js" }))
+    ).toEqual({ path: "index.js", type: "file" });
+  });
+
+  it("reads a listing request as a directory", () => {
+    expect(
+      toolPath(call(REVIEW_TOOL_NAMES.listDirectory, { path: "test" }))
+    ).toEqual({ path: "test", type: "dir" });
+  });
+
+  it("keeps the repository root, which has no name of its own, out of the list", () => {
+    expect(toolPath(call(REVIEW_TOOL_NAMES.listDirectory, { path: "" }))).toBe(
+      null
+    );
+  });
+
+  it("has no path to offer for a tool that reads no file", () => {
+    expect(toolPath(call(REVIEW_TOOL_NAMES.emitIssue, { file: "index.js" }))).toBe(
+      null
+    );
+  });
+
+  it("has no path to offer for an argument the model never sent", () => {
+    expect(toolPath(call(REVIEW_TOOL_NAMES.getDiff, undefined))).toBe(null);
+  });
+
+  it("has no path to offer for text", () => {
+    expect(toolPath({ kind: "text", text: "Reading index.js" })).toBe(null);
+  });
+});
+
+describe("countToolCalls", () => {
+  const call = (toolName: string): TranscriptEntry => ({
+    kind: "tool",
+    toolCallId: `call-${toolName}`,
+    toolName,
+    input: {},
+    outcome: "ok",
+  });
+
+  it("counts the reads and leaves the findings out of the tally", () => {
+    expect(
+      countToolCalls([
+        call(REVIEW_TOOL_NAMES.getPrMetadata),
+        call(REVIEW_TOOL_NAMES.getDiff),
+        call(REVIEW_TOOL_NAMES.emitIssue),
+        { kind: "text", text: "Review complete." },
+      ])
+    ).toBe(2);
+  });
+
+  it("counts nothing for a review that read nothing", () => {
+    expect(countToolCalls([{ kind: "text", text: "No issues found." }])).toBe(0);
+  });
+});
+
+describe("isErrorKind", () => {
+  it("accepts every card the server can name in its header", () => {
+    for (const kind of [
+      "load",
+      "github",
+      "rate-limit",
+      "provider-quota",
+      "review",
+      "private",
+      "too-many-files",
+    ]) {
+      expect(isErrorKind(kind)).toBe(true);
+    }
+  });
+
+  it("refuses a header value no card is built for", () => {
+    expect(isErrorKind("timeout")).toBe(false);
+    expect(isErrorKind("")).toBe(false);
   });
 });
