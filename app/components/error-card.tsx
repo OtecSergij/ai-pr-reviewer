@@ -12,7 +12,9 @@ type ErrorCardProps = {
 
 const HEADLINES: Record<ErrorKind, string> = {
   load: "Couldn’t load this pull request",
+  github: "GitHub couldn’t serve this pull request",
   "rate-limit": "Rate limit reached",
+  "provider-quota": "The review models are out of quota",
   private: "This pull request is private",
   review: "Review failed",
   "too-many-files": "This PR is too large to review",
@@ -21,6 +23,7 @@ const HEADLINES: Record<ErrorKind, string> = {
 const NON_RETRYABLE_KINDS: ReadonlySet<ErrorKind> = new Set([
   "load",
   "private",
+  "rate-limit",
   "too-many-files",
 ]);
 
@@ -40,6 +43,19 @@ const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
       Switch to Private PR and paste a token with the{" "}
       <span className="font-mono">repo</span> scope. The token is used only for
       this request and never stored.
+    </p>
+  ),
+  github: (
+    <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+      The review never started — GitHub timed out, rate-limited us, or answered
+      with an error. Nothing about the pull request itself is wrong; a retry in
+      a moment usually goes through.
+    </p>
+  ),
+  "provider-quota": (
+    <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+      The free model chain runs on shared per-minute quotas, so every model can
+      be out of budget at once. A retry a minute later usually goes through.
     </p>
   ),
 };

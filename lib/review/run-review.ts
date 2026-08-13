@@ -9,23 +9,31 @@ import {
 } from "ai";
 
 import { parsePRUrl, type PRRef } from "@/lib/github/parse-url";
-import {
-  createGithubAccess,
-  type GithubAccess,
-  type PRFileSummary,
-} from "@/lib/github/octokit";
+import { createGithubAccess, type GithubAccess } from "@/lib/github/octokit";
 import { createReviewTools } from "@/lib/review/tools/review-tools";
-import { SYSTEM } from "@/lib/review/system-prompt";
+import { isGeneratedPath } from "@/lib/review/tools/generated-path";
+import { READING_TOOL_NAMES } from "@/lib/review/tools/tool-names";
+import { HANDOFF_NUDGE, SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
-import { MAX_CHANGED_FILES, MAX_STEPS } from "@/lib/review/config";
+import { budgetCeiling, estimateInputTokens } from "@/lib/review/budget";
+import {
+  MAX_CHANGED_FILES,
+  MAX_STEPS,
+  RAW_CHANGED_FILES_CEILING,
+} from "@/lib/review/config";
 import { env } from "@/lib/env";
 import type { Issue } from "@/lib/review/issue";
 import {
   classifyFailure,
+  errorKindForReason,
   errorToMessage,
   errorToResponse,
-  pickVerdict,
-  CUT_SHORT_VERDICT,
+  shownVerdict,
+  verdictMessage,
+  OUTPUT_TRUNCATED_VERDICT,
+  OVER_BUDGET_VERDICT,
+  STEPS_EXHAUSTED_VERDICT,
+  type FailureReason,
   type FailureVerdict,
 } from "@/lib/review/errors";
 import { streamTextMock } from "@/lib/review/mock/stream-text-mock";
@@ -34,7 +42,7 @@ import { rateLimitResponse, reviewLimiter } from "@/lib/rate-limit";
 import { saveReview } from "@/lib/db/reviews";
 import { logger } from "@/lib/log";
 import type { ErrorKind } from "@/lib/review/transcript";
-import { ReviewUIMessage } from "./stream";
+import { ReviewUIMessage, type ReviewFileSummary } from "./stream";
 
 const streamTextImpl = env.MOCK_REVIEW ? streamTextMock : streamText;
 const offlineGithub = env.MOCK_REVIEW && env.MOCK_OFFLINE;
@@ -64,16 +72,26 @@ export async function runReview({
     headSha: string,
     title: string,
     isPrivate: boolean,
-    prFiles: PRFileSummary[];
+    prFiles: ReviewFileSummary[];
 
   try {
     pr = parsePRUrl(prUrl);
+
+    const gate = await reviewLimiter.check(ip);
+    if (!gate.allowed) {
+      log.info(
+        { retryAfterMs: gate.retryAfterMs },
+        "review rejected: rate limited",
+      );
+      return rateLimitResponse(gate);
+    }
 
     gh = offlineGithub
       ? createFixtureGithubAccess(pr)
       : createGithubAccess(
           githubPat ?? (env.MOCK_REVIEW ? null : env.GITHUB_PAT),
-          pr
+          pr,
+          signal,
         );
 
     log.info(
@@ -85,7 +103,7 @@ export async function runReview({
         mockReview: env.MOCK_REVIEW,
         mockOffline: offlineGithub,
       },
-      "github access created"
+      "github access created",
     );
 
     const prMetadata = await gh.getPRMetadata();
@@ -93,15 +111,18 @@ export async function runReview({
     if (prMetadata.isPrivate && !githubPat) {
       log.info(
         { owner: pr.owner, repo: pr.repo, prNumber: pr.prNumber },
-        "review rejected: private PR without token"
+        "review rejected: private PR without token",
       );
       return new Response(
         "Reviewing a private PR needs your own GitHub token.",
-        { status: 403, headers: { "x-review-error": "private" satisfies ErrorKind } }
+        {
+          status: 403,
+          headers: { "x-review-error": "private" satisfies ErrorKind },
+        },
       );
     }
 
-    if (prMetadata.changedFiles > MAX_CHANGED_FILES) {
+    if (prMetadata.changedFiles > RAW_CHANGED_FILES_CEILING) {
       log.info(
         {
           owner: pr.owner,
@@ -109,22 +130,43 @@ export async function runReview({
           prNumber: pr.prNumber,
           changedFiles: prMetadata.changedFiles,
         },
-        "review rejected: too many changed files"
+        "review rejected: too many changed files",
       );
-      return new Response(
-        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer.`,
-        {
-          status: 400,
-          headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
-        }
+      return tooManyFilesResponse(
+        `This PR is too large to inspect: it changes over ${RAW_CHANGED_FILES_CEILING} files.`,
       );
     }
 
     headSha = prMetadata.headSha;
     title = prMetadata.title;
     isPrivate = prMetadata.isPrivate;
-    prFiles = await gh.getPRFiles();
+    prFiles = (await gh.getPRFiles()).map((f) => ({
+      ...f,
+      generated: isGeneratedPath(f.filename),
+    }));
+
+    const reviewableFiles = prFiles.filter((f) => !f.generated).length;
+
+    if (reviewableFiles > MAX_CHANGED_FILES) {
+      log.info(
+        {
+          owner: pr.owner,
+          repo: pr.repo,
+          prNumber: pr.prNumber,
+          changedFiles: prMetadata.changedFiles,
+          reviewableFiles,
+        },
+        "review rejected: too many reviewable files",
+      );
+      return tooManyFilesResponse(
+        `Too many files changed. PR size must be ${MAX_CHANGED_FILES} files or fewer, not counting generated ones.`,
+      );
+    }
   } catch (e) {
+    if (signal.aborted) {
+      log.info("review abandoned before stream");
+      return new Response(null, { status: 499 });
+    }
     const res = errorToResponse(e);
     if (res) {
       log.warn({ err: e }, "review rejected before stream");
@@ -135,12 +177,6 @@ export async function runReview({
 
   if (signal.aborted) {
     return new Response(null, { status: 499 });
-  }
-
-  const gate = await reviewLimiter.check(ip);
-  if (!gate.allowed) {
-    log.info({ retryAfterMs: gate.retryAfterMs }, "review rejected: rate limited");
-    return rateLimitResponse(gate);
   }
 
   const UIIssues = new Map<string, Issue>();
@@ -165,6 +201,43 @@ export async function runReview({
       const tools = createReviewTools(gh, UIIssues, repo, writer, log);
       const streamMessages: ModelMessage[] = [...messages];
       const verdicts: FailureVerdict[] = [];
+      let inheritedTranscript = false;
+
+      const inherit = (stepMessages: ModelMessage[]) => {
+        streamMessages.push(...sanitizeForHandoff(stepMessages), {
+          role: "user",
+          content: HANDOFF_NUDGE,
+        });
+        inheritedTranscript = true;
+      };
+
+      const attemptTrail = () =>
+        verdicts.map((verdict) => ({
+          provider: verdict.provider ?? null,
+          modelId: verdict.modelId ?? null,
+          reason: verdict.reason,
+        }));
+
+      const writeFailover = (index: number, reason: FailureReason) => {
+        writer.write({
+          type: "data-failover",
+          transient: true,
+          data: {
+            from: candidates[index].provider,
+            to: candidates[index + 1].provider,
+            reason,
+          },
+        });
+      };
+
+      const failChain = (shown: FailureVerdict) => {
+        writer.write({
+          type: "data-errorKind",
+          transient: true,
+          data: { kind: errorKindForReason(shown.reason) },
+        });
+        writer.write({ type: "error", errorText: verdictMessage(shown) });
+      };
 
       for (let i = 0; i < candidates.length; i++) {
         writer.write({
@@ -181,9 +254,62 @@ export async function runReview({
           transient: true,
         });
 
+        const estimate = estimateInputTokens(
+          streamMessages,
+          tools,
+          candidates[i].maxOutputTokens,
+        );
+        const budget = budgetCeiling(candidates[i].tpmBudget);
+
+        if (estimate > budget) {
+          verdicts.push({
+            ...OVER_BUDGET_VERDICT,
+            provider: candidates[i].provider,
+            modelId: candidates[i].modelId,
+          });
+
+          if (i < candidates.length - 1) {
+            log.warn(
+              {
+                from: candidates[i].provider,
+                to: candidates[i + 1].provider,
+                reason: OVER_BUDGET_VERDICT.reason,
+                estimate,
+                budget,
+                tpmBudget: candidates[i].tpmBudget,
+                maxOutputTokens: candidates[i].maxOutputTokens ?? null,
+              },
+              "provider failover: estimate over budget",
+            );
+            writeFailover(i, OVER_BUDGET_VERDICT.reason);
+            continue;
+          }
+
+          const shown = shownVerdict(verdicts);
+
+          log.error(
+            {
+              reason: OVER_BUDGET_VERDICT.reason,
+              shownReason: shown.reason,
+              shownProvider: shown.provider ?? null,
+              provider: candidates[i].provider,
+              modelId: candidates[i].modelId,
+              estimate,
+              budget,
+              attempts: attemptTrail(),
+            },
+            "review failed after providers exhausted",
+          );
+
+          failChain(shown);
+          return;
+        }
+
         let failure: unknown = null;
         let finishReason: FinishReason | null = null;
-        const stepMessages: ModelMessage[] = [];
+        let steps = 0;
+        let lastStepHadToolCalls = false;
+        let stepMessages: ModelMessage[] = [];
 
         log.info(
           {
@@ -191,9 +317,12 @@ export async function runReview({
             provider: candidates[i].provider,
             modelId: candidates[i].modelId,
             usesUserKey: candidates[i].usesUserKey,
+            inputEstimate: estimate,
+            budget,
+            maxRetries: candidates[i].maxRetries ?? null,
             mockError: env.MOCK_ERROR ?? null,
           },
-          "model attempt started"
+          "model attempt started",
         );
 
         const result = streamTextImpl({
@@ -201,13 +330,42 @@ export async function runReview({
           system: SYSTEM,
           messages: streamMessages,
           tools,
-          stopWhen: candidates[i].usesUserKey ? () => false : stepCountIs(MAX_STEPS),
+          maxOutputTokens: candidates[i].maxOutputTokens,
+          maxRetries: candidates[i].maxRetries,
+          stopWhen: candidates[i].usesUserKey
+            ? () => false
+            : stepCountIs(MAX_STEPS),
+          prepareStep: inheritedTranscript
+            ? ({ stepNumber }) =>
+                stepNumber === 0
+                  ? { toolChoice: "required", activeTools: READING_TOOL_NAMES }
+                  : undefined
+            : undefined,
           abortSignal: signal,
           onError: ({ error }) => {
             failure = error;
           },
           onStepFinish: (step) => {
-            stepMessages.push(...step.response.messages);
+            steps = step.stepNumber + 1;
+            lastStepHadToolCalls = step.toolCalls.some(
+              (call) => call.providerExecuted !== true,
+            );
+            stepMessages = step.response.messages;
+            log.info(
+              {
+                provider: candidates[i].provider,
+                modelId: candidates[i].modelId,
+                stepNumber: step.stepNumber,
+                maxOutputTokens: candidates[i].maxOutputTokens ?? null,
+                inputTokens: step.usage.inputTokens ?? null,
+                outputTokens: step.usage.outputTokens ?? null,
+                reasoningTokens:
+                  step.usage.outputTokenDetails.reasoningTokens ?? null,
+                totalTokens: step.usage.totalTokens ?? null,
+                finishReason: step.finishReason,
+              },
+              "model step usage",
+            );
             writer.write({
               type: "data-usage",
               data: {
@@ -229,40 +387,43 @@ export async function runReview({
         }
 
         if (!failure) {
-          const cutShort = finishReason === "length";
+          const exhausted = lastStepHadToolCalls && steps >= MAX_STEPS;
+          const cutShort = finishReason === "length" || exhausted;
+          const incomplete = finishReason === null || cutShort;
 
           if (cutShort && i < candidates.length - 1) {
+            const cut =
+              finishReason === "length"
+                ? OUTPUT_TRUNCATED_VERDICT
+                : STEPS_EXHAUSTED_VERDICT;
+
             log.warn(
               {
                 from: candidates[i].provider,
                 to: candidates[i + 1].provider,
-                reason: "too-large",
+                reason: cut.reason,
                 finishReason,
+                steps,
               },
-              "provider failover: output cut short"
+              "provider failover: output cut short",
             );
 
-            writer.write({
-              type: "data-failover",
-              transient: true,
-              data: {
-                from: candidates[i].provider,
-                to: candidates[i + 1].provider,
-                reason: "too-large",
-              },
-            });
+            writeFailover(i, cut.reason);
 
-            verdicts.push(CUT_SHORT_VERDICT);
-            streamMessages.push(...sanitizeForHandoff(stepMessages));
+            verdicts.push({
+              ...cut,
+              provider: candidates[i].provider,
+              modelId: candidates[i].modelId,
+            });
+            inherit(stepMessages);
             continue;
           }
 
-          const skipped = saveSkipReason(isPrivate, signal.aborted, cutShort);
+          const skipped = saveSkipReason(isPrivate, signal.aborted, incomplete);
+          let slug: string | null = null;
+          let saveFailed = false;
 
-          if (skipped) {
-            log.info({ reason: skipped }, "review not saved");
-          } else {
-            let slug: string | null = null;
+          if (!skipped) {
             try {
               slug = await saveReview(
                 {
@@ -272,9 +433,9 @@ export async function runReview({
                   headSha,
                   prTitle: title,
                   issues: [...UIIssues.values()],
-                  provider: candidates[i].modelId,
+                  modelId: candidates[i].modelId,
                 },
-                log
+                log,
               );
             } catch (e) {
               log.error(
@@ -285,10 +446,11 @@ export async function runReview({
                   prNumber: pr.prNumber,
                   headSha,
                 },
-                "saveReview failed"
+                "saveReview failed",
               );
-              slug = null;
+              saveFailed = true;
             }
+
             if (slug) {
               writer.write({
                 type: "data-share",
@@ -297,24 +459,43 @@ export async function runReview({
               });
             }
           }
-          log.info(
-            {
-              owner: pr.owner,
-              repo: pr.repo,
-              prNumber: pr.prNumber,
-              provider: candidates[i].modelId,
-              issues: UIIssues.size,
-              finishReason,
-              durationMs: Date.now() - startedAt,
-            },
-            "review finished"
-          );
+
+          writer.write({
+            type: "data-outcome",
+            data: { incomplete, saveFailed },
+            transient: true,
+          });
+
+          const summary = {
+            owner: pr.owner,
+            repo: pr.repo,
+            prNumber: pr.prNumber,
+            provider: candidates[i].provider,
+            modelId: candidates[i].modelId,
+            issues: UIIssues.size,
+            finishReason,
+            steps,
+            durationMs: Date.now() - startedAt,
+          };
+
+          if (slug) {
+            log.info({ ...summary, slug }, "review finished");
+          } else {
+            log.info(
+              { ...summary, reason: skipped ?? "save-failed" },
+              "review not saved",
+            );
+          }
           return;
         }
 
-        const knownError = classifyFailure(failure, {
-          userKey: candidates[i].usesUserKey,
-        });
+        const knownError: FailureVerdict = {
+          ...classifyFailure(failure, {
+            userKey: candidates[i].usesUserKey,
+          }),
+          provider: candidates[i].provider,
+          modelId: candidates[i].modelId,
+        };
 
         if (knownError.reason === "aborted" && signal.aborted) {
           return;
@@ -329,44 +510,50 @@ export async function runReview({
               from: candidates[i].provider,
               to: candidates[i + 1].provider,
               reason: knownError.reason,
+              retryAfterSec: knownError.retryAfterSec ?? null,
             },
-            "provider failover"
+            "provider failover",
           );
 
-          writer.write({
-            type: "data-failover",
-            transient: true,
-            data: {
-              from: candidates[i].provider,
-              to: candidates[i + 1].provider,
-              reason: knownError.reason,
-            },
-          });
-
-          streamMessages.push(...sanitizeForHandoff(stepMessages));
+          writeFailover(i, knownError.reason);
+          inherit(stepMessages);
           continue;
         }
 
-        const shown = knownError.hop ? pickVerdict(verdicts) : knownError;
+        const shown = knownError.hop ? shownVerdict(verdicts) : knownError;
 
         log.error(
           {
             err: failure,
             reason: knownError.reason,
             shownReason: shown.reason,
-            provider: candidates[i].modelId,
+            shownProvider: shown.provider ?? null,
+            provider: candidates[i].provider,
+            modelId: candidates[i].modelId,
+            retryAfterSec: shown.retryAfterSec ?? null,
+            attempts: attemptTrail(),
           },
-          "review failed after providers exhausted"
+          "review failed after providers exhausted",
         );
 
-        writer.write({ type: "error", errorText: shown.message });
+        failChain(shown);
         return;
       }
     },
-    onError: errorToMessage,
+    onError: (error) => {
+      log.error({ err: error }, "review stream failed");
+      return errorToMessage(error);
+    },
   });
 
   return createUIMessageStreamResponse({ stream });
+}
+
+function tooManyFilesResponse(message: string): Response {
+  return new Response(message, {
+    status: 400,
+    headers: { "x-review-error": "too-many-files" satisfies ErrorKind },
+  });
 }
 
 function githubCredential(githubPat?: string): string {
@@ -378,11 +565,11 @@ function githubCredential(githubPat?: string): string {
 function saveSkipReason(
   isPrivate: boolean,
   aborted: boolean,
-  cutShort: boolean
+  incomplete: boolean,
 ): "private" | "aborted" | "truncated" | "mock" | null {
   if (isPrivate) return "private";
   if (aborted) return "aborted";
-  if (cutShort) return "truncated";
+  if (incomplete) return "truncated";
   if (env.MOCK_REVIEW && !persistMock) return "mock";
   return null;
 }
@@ -410,7 +597,7 @@ function sanitizeForHandoff(messages: ModelMessage[]): ModelMessage[] {
 
     if (message.role === "tool") {
       const content = message.content.filter(
-        (p) => p.type === "tool-result" && keptToolCallIds.has(p.toolCallId)
+        (p) => p.type === "tool-result" && keptToolCallIds.has(p.toolCallId),
       );
       if (content.length === 0) {
         continue;

@@ -13,7 +13,7 @@ export function useCopy(resetMs = 1800): {
     () => () => {
       if (timer.current != null) window.clearTimeout(timer.current);
     },
-    []
+    [],
   );
 
   function copy(text: string) {

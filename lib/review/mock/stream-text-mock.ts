@@ -1,15 +1,10 @@
-import type {
-  InferUIMessageChunk,
-  streamText,
-  ToolCallOptions,
-  ToolExecuteFunction,
-} from "ai";
+import type { streamText, ToolCallOptions, ToolExecuteFunction } from "ai";
 import { env } from "@/lib/env";
 
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { ReviewToolName } from "@/lib/review/tools/tool-names";
 import { modelIssueSchema } from "@/lib/review/model-issue.schema";
-import type { ReviewUIMessage } from "@/lib/review/stream";
+import type { ReviewChunk } from "@/lib/review/stream";
 import { errorToMessage } from "@/lib/review/errors";
 import {
   injectedStartError,
@@ -27,7 +22,8 @@ import type {
   MockTextBlock,
   MockToolStep,
 } from "@/lib/review/mock/scenario";
-import { createToolStepResult } from "@/lib/review/mock/step-result";
+import { createToolStepRecorder } from "@/lib/review/mock/step-result";
+import type { MockToolStepResult } from "@/lib/review/mock/step-result";
 import { logger } from "@/lib/log";
 
 const TEXT_DELTA_PAUSE_MS = 150;
@@ -37,15 +33,13 @@ const FIRST_TOOL_STEP = 0;
 
 type StreamTextOptions = Parameters<typeof streamText>[0];
 
-type MockChunk = InferUIMessageChunk<ReviewUIMessage>;
-
 export const streamTextMock = ((options: StreamTextOptions) => ({
   toUIMessageStream: () => mockUIStream(options),
 })) as unknown as typeof streamText;
 
 async function* mockUIStream(
-  options: StreamTextOptions
-): AsyncGenerator<MockChunk> {
+  options: StreamTextOptions,
+): AsyncGenerator<ReviewChunk> {
   try {
     for await (const chunk of reviewScenario(options)) {
       yield chunk;
@@ -57,10 +51,11 @@ async function* mockUIStream(
 }
 
 async function* reviewScenario(
-  options: StreamTextOptions
-): AsyncGenerator<MockChunk> {
+  options: StreamTextOptions,
+): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const scopeId = createMockIdScope();
+  const recordStep = createToolStepRecorder(options.model, scopeId);
 
   const injected = injectedStartError();
   if (injected) throw injected;
@@ -69,10 +64,10 @@ async function* reviewScenario(
     if (env.MOCK_SCENARIO) {
       logger.warn(
         { mockError: env.MOCK_ERROR, mockScenario: env.MOCK_SCENARIO },
-        "MOCK_SCENARIO ignored: MOCK_ERROR=tool-outcomes streams its own fixture"
+        "MOCK_SCENARIO ignored: MOCK_ERROR=tool-outcomes streams its own fixture",
       );
     }
-    yield* toolOutcomesDemo(options, scopeId);
+    yield* toolOutcomesDemo(options, scopeId, recordStep);
     return;
   }
 
@@ -96,11 +91,18 @@ async function* reviewScenario(
         yield* interleavedTextBlocks(
           scopedBlock(step.first, scopeId),
           scopedBlock(step.second, scopeId),
-          signal
+          signal,
         );
         break;
       case "tool":
-        yield* toolStep(options, step, toolStepNumber, scopeId, signal);
+        yield* toolStep(
+          options,
+          step,
+          toolStepNumber,
+          scopeId,
+          recordStep,
+          signal,
+        );
         toolStepNumber++;
         break;
     }
@@ -113,7 +115,10 @@ async function* reviewScenario(
   yield { type: "finish", finishReason: scenario.finishReason };
 }
 
-function scopedBlock(block: MockTextBlock, scopeId: MockIdScope): MockTextBlock {
+function scopedBlock(
+  block: MockTextBlock,
+  scopeId: MockIdScope,
+): MockTextBlock {
   return { id: scopeId(block.id), deltas: block.deltas };
 }
 
@@ -129,15 +134,16 @@ function assertScenarioIssues(scenario: MockScenario): void {
       .join("; ");
 
     throw new Error(
-      `streamTextMock: fixture issue "${step.toolCallId}" no longer satisfies modelIssueSchema — ${problems}`
+      `streamTextMock: fixture issue "${step.toolCallId}" no longer satisfies modelIssueSchema — ${problems}`,
     );
   }
 }
 
 async function* toolOutcomesDemo(
   options: StreamTextOptions,
-  scopeId: MockIdScope
-): AsyncGenerator<MockChunk> {
+  scopeId: MockIdScope,
+  recordStep: MockToolStepResult,
+): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const failedCallId = scopeId("demo-fail");
 
@@ -149,9 +155,9 @@ async function* toolOutcomesDemo(
         id: "demo-text",
         deltas: ["Demonstrating tool outcomes: ", "one skipped, one failed."],
       },
-      scopeId
+      scopeId,
     ),
-    signal
+    signal,
   );
   if (signal?.aborted) return;
 
@@ -165,7 +171,8 @@ async function* toolOutcomesDemo(
     },
     FIRST_TOOL_STEP,
     scopeId,
-    signal
+    recordStep,
+    signal,
   );
   if (signal?.aborted) return;
 
@@ -188,8 +195,8 @@ async function* toolOutcomesDemo(
 
 async function* textBlock(
   block: MockTextBlock,
-  signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+  signal?: AbortSignal,
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -207,8 +214,8 @@ async function* textBlock(
 
 async function* reasoningBlock(
   block: MockTextBlock,
-  signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+  signal?: AbortSignal,
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -227,8 +234,8 @@ async function* reasoningBlock(
 async function* interleavedTextBlocks(
   first: MockTextBlock,
   second: MockTextBlock,
-  signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+  signal?: AbortSignal,
+): AsyncGenerator<ReviewChunk> {
   if (signal?.aborted) return;
   await sleep(EVENT_PAUSE_MS, signal);
   if (signal?.aborted) return;
@@ -258,8 +265,9 @@ async function* toolStep(
   step: MockToolStep,
   stepNumber: number,
   scopeId: MockIdScope,
-  signal?: AbortSignal
-): AsyncGenerator<MockChunk> {
+  recordStep: MockToolStepResult,
+  signal?: AbortSignal,
+): AsyncGenerator<ReviewChunk> {
   const { toolName, input } = step;
   const toolCallId = scopeId(step.toolCallId);
 
@@ -274,22 +282,14 @@ async function* toolStep(
     toolName,
     input,
     toolCallId,
-    signal
+    signal,
   );
   if (signal?.aborted) return;
 
   yield { type: "tool-output-available", toolCallId, output };
 
   await options.onStepFinish?.(
-    createToolStepResult({
-      model: options.model,
-      stepNumber,
-      toolName,
-      toolCallId,
-      input,
-      output,
-      scopeId,
-    })
+    recordStep({ stepNumber, toolName, toolCallId, input, output }),
   );
 }
 
@@ -298,15 +298,14 @@ async function callTool(
   toolName: ReviewToolName,
   input: unknown,
   toolCallId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const execute = tools?.[toolName]?.execute as
-    | ToolExecuteFunction<unknown, unknown>
-    | undefined;
+    ToolExecuteFunction<unknown, unknown> | undefined;
 
   if (!execute) {
     throw new Error(
-      `streamTextMock: tool "${toolName}" has no execute — the mock can only call the real route tools`
+      `streamTextMock: tool "${toolName}" has no execute — the mock can only call the real route tools`,
     );
   }
 

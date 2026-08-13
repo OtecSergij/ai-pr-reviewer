@@ -10,10 +10,11 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   IMAGE: ghcr.io/otecsergij/ai-pr-reviewer
+  CANONICAL_REPOSITORY: OtecSergij/ai-pr-reviewer
 
 jobs:
   lint:
@@ -31,7 +32,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test
       - name: Assert startup preload is wired into the entrypoint
-        run: grep -q 'validate-startup.mjs' Dockerfile
+        run: grep -q -- '--import ./validate-startup.mjs' Dockerfile
 
   build-push:
     needs: lint
@@ -43,31 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
-      - name: Build image (load for smoke test)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          load: true
-          tags: ${{ env.IMAGE }}:ci
-          provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Smoke test - container fails fast on missing env
-        run: |
-          if docker run --rm ${{ env.IMAGE }}:ci; then
-            echo "ERROR: container should exit non-zero with no env"
-            exit 1
-          fi
-          echo "fail-fast OK"
-      - name: Log in to GHCR
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Docker metadata
-        if: github.ref == 'refs/heads/main'
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -75,18 +52,112 @@ jobs:
           tags: |
             type=raw,value=latest
             type=sha,prefix=sha-
-      - name: Push to GHCR
-        if: github.ref == 'refs/heads/main'
+      # Built once and loaded locally, so the tags pushed below resolve to the
+      # exact image the smoke tests ran against.
+      - name: Build image
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
-          platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: |
+            ${{ env.IMAGE }}:ci
+            ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test - migration refuses to run without DATABASE_URL
+        run: |
+          if timeout 60 docker run --rm "$IMAGE:ci" >/tmp/smoke1.out 2>/tmp/smoke1.err; then
+            echo "ERROR: container should exit non-zero with no env"
+            exit 1
+          fi
+          if ! grep -q 'DATABASE_URL is not set' /tmp/smoke1.err; then
+            echo "ERROR: expected the migration guard to report a missing DATABASE_URL"
+            cat /tmp/smoke1.err
+            exit 1
+          fi
+          echo "fail-fast OK"
+
+      - name: Start Postgres for the startup-preload smoke test
+        run: |
+          docker network create pr-reviewer-smoke-net
+          docker run -d --name pr-reviewer-smoke-pg --network pr-reviewer-smoke-net \
+            -e POSTGRES_USER=smoke -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=smoke \
+            postgres:18-alpine
+          for _ in $(seq 1 30); do
+            if docker exec pr-reviewer-smoke-pg pg_isready -h 127.0.0.1 -U smoke -d smoke >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Postgres did not become ready in time"
+          docker logs pr-reviewer-smoke-pg
+          exit 1
+
+      # Run detached and bound the wait: a preload that is wired out of the
+      # entrypoint does not crash, it leaves Next retrying the instrumentation
+      # hook forever, which would otherwise hang the job until its timeout.
+      - name: Smoke test - startup preload runs after a successful migration
+        run: |
+          docker run -d --name pr-reviewer-smoke-app --network pr-reviewer-smoke-net \
+            -e DATABASE_URL='postgres://smoke:smoke@pr-reviewer-smoke-pg:5432/smoke' \
+            "$IMAGE:ci"
+          timeout 60 docker wait pr-reviewer-smoke-app >/tmp/smoke2.code || echo TIMEOUT >/tmp/smoke2.code
+          docker logs pr-reviewer-smoke-app >/tmp/smoke2.out 2>/tmp/smoke2.err
+          docker rm -f pr-reviewer-smoke-app >/dev/null
+          code=$(cat /tmp/smoke2.code)
+          if [ "$code" = TIMEOUT ]; then
+            echo "ERROR: container never exited - it did not fail fast on the missing model keys"
+            cat /tmp/smoke2.err
+            exit 1
+          fi
+          if [ "$code" = 0 ]; then
+            echo "ERROR: container should exit non-zero without model keys"
+            cat /tmp/smoke2.err
+            exit 1
+          fi
+          if ! grep -q 'validate-startup.mjs' /tmp/smoke2.err; then
+            echo "ERROR: the failure did not come from the startup preload"
+            cat /tmp/smoke2.err
+            exit 1
+          fi
+          if ! grep -qE 'Invalid or missing environment variables:.*GROQ_API_KEY' /tmp/smoke2.err; then
+            echo "ERROR: expected the preload to report the missing model keys"
+            cat /tmp/smoke2.err
+            exit 1
+          fi
+          if grep -qE 'Invalid or missing environment variables:.*DATABASE_URL' /tmp/smoke2.err; then
+            echo "ERROR: DATABASE_URL was rejected - the smoke Postgres was not wired up"
+            cat /tmp/smoke2.err
+            exit 1
+          fi
+          echo "startup preload OK"
+
+      - name: Tear down the smoke Postgres
+        if: always()
+        run: |
+          docker rm -f pr-reviewer-smoke-app || true
+          docker rm -f pr-reviewer-smoke-pg || true
+          docker network rm pr-reviewer-smoke-net || true
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main' && github.repository == env.CANONICAL_REPOSITORY
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push to GHCR
+        if: github.ref == 'refs/heads/main' && github.repository == env.CANONICAL_REPOSITORY
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while read -r tag; do
+            [ -n "$tag" ] || continue
+            docker push "$tag"
+          done <<< "$TAGS"
 
   deploy:
     needs: build-push
@@ -100,8 +171,13 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           if [ -z "$COOLIFY_DEPLOY_URL" ] || [ -z "$COOLIFY_TOKEN" ]; then
-            echo "Coolify secrets not set - skipping deploy (set COOLIFY_DEPLOY_URL and COOLIFY_TOKEN repo secrets to enable)"
-            exit 0
+            if [ "$GITHUB_REPOSITORY" != "$CANONICAL_REPOSITORY" ]; then
+              echo "Coolify secrets not set - skipping deploy on fork $GITHUB_REPOSITORY (set COOLIFY_DEPLOY_URL and COOLIFY_TOKEN repo secrets to enable)"
+              exit 0
+            fi
+            echo "ERROR: Coolify secrets are missing on $CANONICAL_REPOSITORY - the image was pushed to GHCR but production was not redeployed."
+            echo "Restore the COOLIFY_DEPLOY_URL and COOLIFY_TOKEN repo secrets, then re-run this job."
+            exit 1
           fi
           curl --fail-with-body --retry 3 --retry-connrefused --retry-delay 5 \
             --connect-timeout 10 --max-time 60 -sS \

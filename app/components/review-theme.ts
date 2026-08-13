@@ -64,7 +64,7 @@ export type SeverityPill = { severity: Issue["severity"]; label: string };
 
 export function severityCountLabel(
   severity: Issue["severity"],
-  count: number
+  count: number,
 ): string {
   return `${count} ${
     count === 1

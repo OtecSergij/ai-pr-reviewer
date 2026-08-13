@@ -3,13 +3,9 @@ import { parseUnifiedDiff } from "./diff";
 
 describe("parseUnifiedDiff", () => {
   it("assigns line numbers across a single hunk", () => {
-    const patch = [
-      "@@ -1,3 +1,4 @@",
-      " ctx",
-      "-gone",
-      "+new",
-      " tail",
-    ].join("\n");
+    const patch = ["@@ -1,3 +1,4 @@", " ctx", "-gone", "+new", " tail"].join(
+      "\n",
+    );
 
     const hunks = parseUnifiedDiff(patch);
     expect(hunks).toHaveLength(1);
@@ -57,11 +53,9 @@ describe("parseUnifiedDiff", () => {
   });
 
   it("skips the no-newline marker line", () => {
-    const patch = [
-      "@@ -1 +1 @@",
-      "+text",
-      "\\ No newline at end of file",
-    ].join("\n");
+    const patch = ["@@ -1 +1 @@", "+text", "\\ No newline at end of file"].join(
+      "\n",
+    );
 
     const hunks = parseUnifiedDiff(patch);
     expect(hunks[0].lines).toEqual([

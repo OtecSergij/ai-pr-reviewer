@@ -84,7 +84,7 @@ function summarizeClientError(error: unknown): ClientErrorSummary {
 
 function pruneErrorWindows(
   windows: Map<string, ClientErrorWindow>,
-  now: number
+  now: number,
 ): void {
   if (windows.size <= CLIENT_ERROR_KEY_LIMIT) return;
   for (const [key, window] of windows) {
@@ -114,7 +114,7 @@ function buildClient(): RedisClient {
       stackOnFirst && !open
         ? { err: error, suppressed: 0 }
         : { ...details, suppressed: open?.suppressed ?? 0 },
-      "redis client error"
+      "redis client error",
     );
 
     errorWindows.set(key, { at: now, suppressed: 0 });

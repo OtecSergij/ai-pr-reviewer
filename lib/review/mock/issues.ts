@@ -22,7 +22,8 @@ export const mockModelIssues: ModelIssue[] = [
     line_start: 61,
     line_end: 61,
     severity: "nit",
-    title: 'describe label says "long string" but the block mostly tests abbreviations',
+    title:
+      'describe label says "long string" but the block mostly tests abbreviations',
     body: "`'17 msecs'`, `'1 sec'`, `'1 min'`, `'1 hr'` are abbreviations, not long units. A failing test in this block would point at the wrong place — consider renaming or splitting it.",
   },
 ];
@@ -33,7 +34,8 @@ export const richModelIssues: ModelIssue[] = [
     line_start: 74,
     line_end: 77,
     severity: "error",
-    title: "`parse()` returns `undefined` on unmatched input, so `ms()` yields `NaN`",
+    title:
+      "`parse()` returns `undefined` on unmatched input, so `ms()` yields `NaN`",
     body: "`parse` produces a number only when the regex matches. Any other input falls through to an implicit `undefined`, which the caller then multiplies:\n\n| input | current result | expected |\n| --- | --- | --- |\n| `'100'` | `100` | `100` |\n| `'1 fortnight'` | `undefined` | throws |\n| `''` | `undefined` | throws |\n\nA timer built from `NaN` fires on the next tick, so the failure surfaces far away from the bad input that caused it.",
     suggestion:
       "```js\nif (!match) {\n  throw new TypeError('ms(): unsupported value ' + JSON.stringify(str));\n}\n```",
@@ -46,7 +48,7 @@ export const richModelIssues: ModelIssue[] = [
     title: "The alias list in `parse` and the one in `fmtLong` can drift apart",
     body: bodyAtMaxLength(
       "The regex above and the `switch` below enumerate the same unit aliases, and nothing ties the two lists together. ",
-      "Adding a unit therefore means editing two places that no test compares, and a reviewer has no mechanical way to see that only one of them was updated. "
+      "Adding a unit therefore means editing two places that no test compares, and a reviewer has no mechanical way to see that only one of them was updated. ",
     ),
     suggestion:
       "Derive the `switch` from a single `UNITS` table so the pattern and the multipliers cannot disagree.",

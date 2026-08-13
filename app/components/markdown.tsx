@@ -22,45 +22,50 @@ const REMARK_REHYPE_OPTIONS: Options["remarkRehypeOptions"] = {
   footnoteLabelTagName: "h4",
 };
 
+function withClass(base: string, extra?: string): string {
+  return extra ? `${base} ${extra}` : base;
+}
+
 const BLOCK_COMPONENTS: Components = {
   p: ({ children }) => (
     <p className="mb-3 text-[13.5px] leading-[1.65] text-ink-soft [text-wrap:pretty]">
       {children}
     </p>
   ),
-  h1: ({ children, id }) => (
-    <h4 id={id} className={HEADING_CLASS}>
+  h1: ({ children, className, id }) => (
+    <h4 id={id} className={withClass(HEADING_CLASS, className)}>
       {children}
     </h4>
   ),
-  h2: ({ children, id }) => (
-    <h4 id={id} className={HEADING_CLASS}>
+  h2: ({ children, className, id }) => (
+    <h4 id={id} className={withClass(HEADING_CLASS, className)}>
       {children}
     </h4>
   ),
-  h3: ({ children, id }) => (
-    <h5 id={id} className={SUBHEADING_CLASS}>
+  h3: ({ children, className, id }) => (
+    <h5 id={id} className={withClass(SUBHEADING_CLASS, className)}>
       {children}
     </h5>
   ),
-  h4: ({ children, id }) => (
-    <h5 id={id} className={SUBHEADING_CLASS}>
+  h4: ({ children, className, id }) => (
+    <h5 id={id} className={withClass(SUBHEADING_CLASS, className)}>
       {children}
     </h5>
   ),
-  h5: ({ children, id }) => (
-    <h5 id={id} className={SUBHEADING_CLASS}>
+  h5: ({ children, className, id }) => (
+    <h5 id={id} className={withClass(SUBHEADING_CLASS, className)}>
       {children}
     </h5>
   ),
-  h6: ({ children, id }) => (
-    <h5 id={id} className={SUBHEADING_CLASS}>
+  h6: ({ children, className, id }) => (
+    <h5 id={id} className={withClass(SUBHEADING_CLASS, className)}>
       {children}
     </h5>
   ),
   code: ({ className, children }) => {
     const isBlock =
       /language-/.test(className ?? "") ||
+      !children ||
       (typeof children === "string" && children.includes("\n"));
     return isBlock ? (
       <code className="font-mono">{children}</code>
@@ -156,17 +161,26 @@ export function Markdown({ children }: { children: string }) {
   );
 }
 
+const INLINE_ALLOWED_ELEMENTS = ["a", "br", "code", "del", "em", "p", "strong"];
+
 const INLINE_COMPONENTS: Components = {
   p: ({ children }) => <>{children}</>,
   code: ({ children }) => <code className={INLINE_CODE_CLASS}>{children}</code>,
   em: ({ children }) => <em>{children}</em>,
-  strong: ({ children }) => (
-    <strong className="font-semibold">{children}</strong>
-  ),
+  strong: BLOCK_COMPONENTS.strong,
+  del: BLOCK_COMPONENTS.del,
+  a: BLOCK_COMPONENTS.a,
 };
 
 export function MarkdownInline({ children }: { children: string }) {
   return (
-    <ReactMarkdown components={INLINE_COMPONENTS}>{children}</ReactMarkdown>
+    <ReactMarkdown
+      components={INLINE_COMPONENTS}
+      remarkPlugins={REMARK_PLUGINS}
+      allowedElements={INLINE_ALLOWED_ELEMENTS}
+      unwrapDisallowed
+    >
+      {children}
+    </ReactMarkdown>
   );
 }

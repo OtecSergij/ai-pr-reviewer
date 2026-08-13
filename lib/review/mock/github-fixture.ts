@@ -422,14 +422,11 @@ already supported.
 The unit table in the README is left as it is; documenting the new alias is
 follow-up work.
 `,
-  state: "open",
-  merged: false,
   isPrivate: false,
   baseRef: "master",
   headRef: "add-week-unit",
   headSha: HEAD_SHA,
   changedFiles: 3,
-  htmlUrl: "https://github.com/vercel/ms/pull/35",
 };
 
 const CHANGED_FILES: PRFileSummary[] = [
@@ -587,9 +584,12 @@ export function createFixtureGithubAccess(pr: PRRef): GithubAccess {
     getFile: async (filename) =>
       CHANGED_FILES.find((f) => f.filename === filename) ?? null,
     getDiff: async (filename) => PATCHES.get(filename) ?? null,
-    getFileContents: async ({ path, ref }) => {
+    getFileContents: async ({ path, ref, maxBytes }) => {
       if (DIRECTORIES.has(path)) {
-        throw new GitHubApiError(200, `Expected file at ${path}, got directory`);
+        throw new GitHubApiError(
+          200,
+          `Expected file at ${path}, got directory`,
+        );
       }
 
       const content = FILE_CONTENTS.get(path);
@@ -598,11 +598,13 @@ export function createFixtureGithubAccess(pr: PRRef): GithubAccess {
         throw new NotFoundError(`file ${pr.owner}/${pr.repo}@${ref}:${path}`);
       }
 
+      const size = byteSize(content);
+
       return {
         path,
         ref,
-        content,
-        size: byteSize(content),
+        content: size > maxBytes ? null : content,
+        size,
         sha: blobSha(content),
       };
     },
@@ -613,12 +615,12 @@ export function createFixtureGithubAccess(pr: PRRef): GithubAccess {
         if (FILE_CONTENTS.has(path)) {
           throw new GitHubApiError(
             200,
-            `Expected directory at ${path}, got file`
+            `Expected directory at ${path}, got file`,
           );
         }
 
         throw new NotFoundError(
-          `directory ${pr.owner}/${pr.repo}@${ref}:${path || "/"}`
+          `directory ${pr.owner}/${pr.repo}@${ref}:${path || "/"}`,
         );
       }
 

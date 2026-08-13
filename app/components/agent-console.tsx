@@ -2,15 +2,28 @@
 
 import { memo, useEffect, useId, useRef, useState } from "react";
 import type { TranscriptEntry } from "@/lib/review/transcript";
-import { countSteps, isTextEntry } from "@/lib/review/transcript";
+import { countToolCalls, isTextEntry } from "@/lib/review/transcript";
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import { Spinner } from "./spinner";
-import { toolLabel, statusLabel, providerLabel, reasonLabel } from "./transcript";
+import {
+  toolLabel,
+  statusLabel,
+  partLabel,
+  providerLabel,
+  reasonLabel,
+} from "./transcript-labels";
 
 type AgentConsoleProps = {
   transcript: TranscriptEntry[];
   mode?: "live" | "trace";
+  notice?: string | null;
 };
+
+const BOLD_MARKER = /\*\*/g;
+
+function stripBoldMarkers(text: string): string {
+  return text.replace(BOLD_MARKER, "");
+}
 
 function isConsoleEntry(entry: TranscriptEntry): boolean {
   if (entry.kind === "tool") {
@@ -25,6 +38,7 @@ function isConsoleEntry(entry: TranscriptEntry): boolean {
 export const AgentConsole = memo(function AgentConsole({
   transcript,
   mode = "live",
+  notice = null,
 }: AgentConsoleProps) {
   const trace = mode === "trace";
   const [open, setOpen] = useState(false);
@@ -32,9 +46,12 @@ export const AgentConsole = memo(function AgentConsole({
   const bodyRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
-  const rows = transcript.filter(isConsoleEntry);
-  const stepCount = countSteps(transcript);
-  const lastTool = rows.filter((e) => e.kind === "tool").at(-1);
+  const rows = transcript.flatMap((entry, index) =>
+    isConsoleEntry(entry) ? [{ entry, index }] : [],
+  );
+  const toolCalls = countToolCalls(transcript);
+  const lastTextRow = rows.findLastIndex(({ entry }) => isTextEntry(entry));
+  const lastTool = rows.map((r) => r.entry).findLast((e) => e.kind === "tool");
   const current =
     lastTool && lastTool.kind === "tool"
       ? toolLabel(lastTool.toolName, lastTool.input)
@@ -62,10 +79,10 @@ export const AgentConsole = memo(function AgentConsole({
           {trace ? "Agent trace" : current ? current.label : "Starting review…"}
         </h2>
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[#6e7781]">
-          {trace ? "" : current?.detail ?? ""}
+          {trace ? "" : (current?.detail ?? "")}
         </span>
         <span className="shrink-0 font-mono text-[10.5px] text-subtle">
-          {trace ? `${stepCount} steps` : `step ${stepCount}`}
+          {trace ? `${toolCalls} tool calls` : `call ${toolCalls}`}
         </span>
         <button
           onClick={() => setOpen((v) => !v)}
@@ -76,6 +93,15 @@ export const AgentConsole = memo(function AgentConsole({
           {open ? "Collapse" : "Expand"}
         </button>
       </div>
+
+      {!trace && notice ? (
+        <div
+          role="status"
+          className="border-b border-[#f0e3c8] bg-[#fffbf0] px-3.5 py-2 font-mono text-[11.5px] text-[#9a6700]"
+        >
+          {notice}
+        </div>
+      ) : null}
 
       {bodyShown ? (
         <div
@@ -89,17 +115,21 @@ export const AgentConsole = memo(function AgentConsole({
           className="overflow-y-auto bg-[#fcfcfd] px-4 py-3 transition-[height] duration-200"
           style={trace ? { maxHeight: 550 } : { height: open ? 550 : 300 }}
         >
-          {rows.map((entry, i) => {
+          {rows.map(({ entry, index }, i) => {
             if (entry.kind === "tool") {
               const { label, detail } = toolLabel(entry.toolName, entry.input);
+              const part = partLabel(entry.patchPart);
               return (
                 <div
-                  key={i}
+                  key={`entry-${index}`}
                   className="whitespace-pre-wrap font-mono text-[12px] font-medium leading-[1.75] text-[#6366f1]"
                   style={{ marginTop: i === 0 ? 0 : 12 }}
                 >
                   ▸ {label}
                   {detail ? `  ·  ${detail}` : ""}
+                  {part ? (
+                    <span className="text-[#6e7781]">{`  ·  ${part}`}</span>
+                  ) : null}
                   {entry.outcome === "skipped" ? (
                     <span className="text-[#6e7781]">
                       {`  ·  ${statusLabel(entry.note)}`}
@@ -113,7 +143,7 @@ export const AgentConsole = memo(function AgentConsole({
             if (entry.kind === "failover") {
               return (
                 <div
-                  key={i}
+                  key={`entry-${index}`}
                   className="my-2 flex items-center gap-2 font-mono text-[11px] font-semibold text-[#9a6700]"
                 >
                   <span className="h-px flex-1 bg-[#f0e3c8]" />
@@ -125,11 +155,11 @@ export const AgentConsole = memo(function AgentConsole({
                 </div>
               );
             }
-            const streaming = !trace && i === rows.length - 1;
+            const streaming = !trace && i === lastTextRow;
             if (entry.kind === "reasoning") {
               return (
                 <ReasoningRow
-                  key={i}
+                  key={`entry-${index}`}
                   text={entry.text}
                   streaming={streaming}
                   first={i === 0}
@@ -138,7 +168,7 @@ export const AgentConsole = memo(function AgentConsole({
             }
             return (
               <div
-                key={i}
+                key={`entry-${index}`}
                 className="whitespace-pre-wrap font-mono text-[12px] leading-[1.75] text-muted"
                 style={{ marginTop: i === 0 ? 0 : 10 }}
               >
@@ -185,7 +215,7 @@ function ReasoningRow({
           clamped ? "line-clamp-3" : ""
         }`}
       >
-        {text}
+        {stripBoldMarkers(text)}
         {streaming ? <span className="text-subtle">▌</span> : null}
       </div>
       {(clamped && clipped) || open ? (

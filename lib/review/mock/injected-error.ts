@@ -15,11 +15,13 @@ function apiError({
   statusCode,
   isRetryable = false,
   responseBody,
+  responseHeaders,
 }: {
   message: string;
   statusCode: number;
   isRetryable?: boolean;
   responseBody?: string;
+  responseHeaders?: Record<string, string>;
 }): APICallError {
   return new APICallError({
     message,
@@ -28,6 +30,7 @@ function apiError({
     statusCode,
     isRetryable,
     responseBody,
+    responseHeaders,
   });
 }
 
@@ -64,6 +67,7 @@ export function injectedStartError(): unknown {
         message: "Too Many Requests",
         statusCode: 429,
         isRetryable: true,
+        responseHeaders: { "retry-after": "30" },
       });
     case "context-overflow":
       return apiError({
@@ -92,7 +96,7 @@ export function injectedStreamError(): APICallError {
 
 export function streamErrorStopIndex(
   steps: MockStep[],
-  messages: ModelMessage[] | undefined
+  messages: ModelMessage[] | undefined,
 ): number | null {
   if (env.MOCK_ERROR === "mid-stream") return midStreamStopIndex(steps);
 
@@ -109,7 +113,7 @@ function isFirstAttempt(messages: ModelMessage[] | undefined): boolean {
 
 function midStreamStopIndex(steps: MockStep[]): number {
   const issueIndexes = steps.flatMap((step, index) =>
-    isIssueStep(step) ? [index] : []
+    isIssueStep(step) ? [index] : [],
   );
 
   return (

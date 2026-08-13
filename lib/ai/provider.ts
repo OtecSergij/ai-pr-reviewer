@@ -10,6 +10,7 @@ import {
 } from "ai";
 import type { Logger } from "pino";
 import { env } from "@/lib/env";
+import { tracedFetch } from "@/lib/ai/provider-fetch";
 
 export type ProviderName = "cerebras" | "groq" | "google" | "anthropic";
 
@@ -18,31 +19,36 @@ export type ModelCandidate = {
   provider: ProviderName;
   modelId: string;
   usesUserKey: boolean;
+  contextWindow: number;
+  tpmBudget: number;
+  maxOutputTokens?: number;
+  maxRetries?: number;
 };
 
 export function selectModels(
   anthropicKey: string | undefined,
-  log: Logger
+  log: Logger,
 ): ModelCandidate[] {
   const candidates = anthropicKey
-    ? userKeyChain(anthropicKey)
-    : serverKeyChain();
+    ? userKeyChain(anthropicKey, log)
+    : serverKeyChain(log);
 
   log.info(
     {
       byo: Boolean(anthropicKey),
       modelIds: candidates.map((candidate) => candidate.modelId),
     },
-    "model chain resolved"
+    "model chain resolved",
   );
 
   return candidates;
 }
 
-function userKeyChain(anthropicKey: string): ModelCandidate[] {
+function userKeyChain(anthropicKey: string, log: Logger): ModelCandidate[] {
   const anthropic = createAnthropic({
     apiKey: anthropicKey,
     baseURL: "https://api.anthropic.com/v1",
+    fetch: tracedFetch("anthropic", log),
   });
 
   return [
@@ -51,15 +57,24 @@ function userKeyChain(anthropicKey: string): ModelCandidate[] {
       provider: "anthropic",
       modelId: "claude-sonnet-4-6",
       usesUserKey: true,
+      contextWindow: 1_000_000,
+      tpmBudget: 2_000_000,
     },
   ];
 }
 
-function serverKeyChain(): ModelCandidate[] {
-  const cerebras = createCerebras({ apiKey: env.CEREBRAS_API_KEY });
-  const groq = createGroq({ apiKey: env.GROQ_API_KEY });
+function serverKeyChain(log: Logger): ModelCandidate[] {
+  const cerebras = createCerebras({
+    apiKey: env.CEREBRAS_API_KEY,
+    fetch: tracedFetch("cerebras", log),
+  });
+  const groq = createGroq({
+    apiKey: env.GROQ_API_KEY,
+    fetch: tracedFetch("groq", log),
+  });
   const google = createGoogleGenerativeAI({
     apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
+    fetch: tracedFetch("google", log),
   });
 
   return [
@@ -68,12 +83,19 @@ function serverKeyChain(): ModelCandidate[] {
       provider: "groq",
       modelId: "openai/gpt-oss-120b",
       usesUserKey: false,
+      contextWindow: 131_072,
+      tpmBudget: 8_000,
+      maxRetries: 0,
     },
     {
-      model: cerebras("zai-glm-4.7"),
+      model: cerebras("gpt-oss-120b"),
       provider: "cerebras",
-      modelId: "zai-glm-4.7",
+      modelId: "gpt-oss-120b",
       usesUserKey: false,
+      contextWindow: 65_536,
+      tpmBudget: 30_000,
+      maxOutputTokens: 6_000,
+      maxRetries: 0,
     },
     {
       model: wrapLanguageModel({
@@ -89,6 +111,9 @@ function serverKeyChain(): ModelCandidate[] {
       provider: "google",
       modelId: "gemini-2.5-flash",
       usesUserKey: false,
+      contextWindow: 1_048_576,
+      tpmBudget: 250_000,
+      maxOutputTokens: 24_000,
     },
   ];
 }

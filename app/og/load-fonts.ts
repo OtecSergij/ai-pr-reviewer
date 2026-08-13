@@ -18,8 +18,18 @@ export async function loadOgFonts(): Promise<OgFont[]> {
   ]);
 
   return [
-    { name: "Instrument Sans", data: sansRegular, weight: 400, style: "normal" },
+    {
+      name: "Instrument Sans",
+      data: sansRegular,
+      weight: 400,
+      style: "normal",
+    },
     { name: "Instrument Sans", data: sansBold, weight: 700, style: "normal" },
-    { name: "JetBrains Mono", data: monoSemiBold, weight: 600, style: "normal" },
+    {
+      name: "JetBrains Mono",
+      data: monoSemiBold,
+      weight: 600,
+      style: "normal",
+    },
   ];
 }

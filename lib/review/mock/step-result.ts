@@ -75,83 +75,85 @@ function stepUsage(stepNumber: number): LanguageModelUsage {
   };
 }
 
-export function createToolStepResult({
-  model,
-  stepNumber,
-  toolName,
-  toolCallId,
-  input,
-  output,
-  scopeId,
-}: {
-  model: LanguageModel;
+export type MockToolStepResult = (args: {
   stepNumber: number;
   toolName: ReviewToolName;
   toolCallId: string;
   input: unknown;
   output: unknown;
-  scopeId: MockIdScope;
-}): MockStepResult {
-  const { provider, modelId } = modelIdentity(model);
-  const toolCall = {
-    type: "tool-call" as const,
-    toolCallId,
-    toolName,
-    input,
-  };
-  const toolResult = {
-    type: "tool-result" as const,
-    toolCallId,
-    toolName,
-    input,
-    output,
-  };
+}) => MockStepResult;
 
-  return {
-    stepNumber,
-    model: { provider, modelId },
-    functionId: undefined,
-    metadata: undefined,
-    experimental_context: undefined,
-    content: [toolCall, toolResult],
-    text: "",
-    reasoning: [],
-    reasoningText: undefined,
-    files: [],
-    sources: [],
-    toolCalls: [toolCall],
-    staticToolCalls: [toolCall],
-    dynamicToolCalls: [],
-    toolResults: [toolResult],
-    staticToolResults: [toolResult],
-    dynamicToolResults: [],
-    finishReason: "tool-calls",
-    rawFinishReason: "tool_calls",
-    usage: stepUsage(stepNumber),
-    warnings: [],
-    request: {},
-    response: {
-      id: scopeId(`mock-response-${stepNumber}`),
-      timestamp: new Date(),
-      modelId,
-      messages: [
-        ...(stepNumber === FIRST_STEP_NUMBER
-          ? messagesDroppedByHandoff(scopeId)
-          : []),
-        { role: "assistant", content: [toolCall] },
-        {
-          role: "tool",
-          content: [
-            {
-              type: "tool-result",
-              toolCallId,
-              toolName,
-              output: { type: "json", value: toJsonValue(output) },
-            },
-          ],
-        },
-      ],
-    },
-    providerMetadata: undefined,
+export function createToolStepRecorder(
+  model: LanguageModel,
+  scopeId: MockIdScope,
+): MockToolStepResult {
+  const { provider, modelId } = modelIdentity(model);
+  const responseMessages: ResponseMessage[] = [];
+
+  return ({ stepNumber, toolName, toolCallId, input, output }) => {
+    const toolCall = {
+      type: "tool-call" as const,
+      toolCallId,
+      toolName,
+      input,
+    };
+    const toolResult = {
+      type: "tool-result" as const,
+      toolCallId,
+      toolName,
+      input,
+      output,
+    };
+
+    if (stepNumber === FIRST_STEP_NUMBER) {
+      responseMessages.push(...messagesDroppedByHandoff(scopeId));
+    }
+
+    responseMessages.push(
+      { role: "assistant", content: [toolCall] },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId,
+            toolName,
+            output: { type: "json", value: toJsonValue(output) },
+          },
+        ],
+      },
+    );
+
+    return {
+      stepNumber,
+      model: { provider, modelId },
+      functionId: undefined,
+      metadata: undefined,
+      experimental_context: undefined,
+      content: [toolCall, toolResult],
+      text: "",
+      reasoning: [],
+      reasoningText: undefined,
+      files: [],
+      sources: [],
+      toolCalls: [toolCall],
+      staticToolCalls: [toolCall],
+      dynamicToolCalls: [],
+      toolResults: [toolResult],
+      staticToolResults: [toolResult],
+      dynamicToolResults: [],
+      finishReason: "tool-calls",
+      rawFinishReason: "tool_calls",
+      usage: stepUsage(stepNumber),
+      warnings: [],
+      request: {},
+      response: {
+        id: scopeId(`mock-response-${stepNumber}`),
+        timestamp: new Date(),
+        modelId,
+        messages: [...responseMessages],
+      },
+      providerMetadata: undefined,
+    };
   };
 }

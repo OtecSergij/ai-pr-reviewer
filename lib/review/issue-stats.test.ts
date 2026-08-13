@@ -24,7 +24,11 @@ describe("countBySeverity", () => {
   });
 
   it("counts a single occurrence per severity", () => {
-    const counts = countBySeverity([issue("error"), issue("warning"), issue("nit")]);
+    const counts = countBySeverity([
+      issue("error"),
+      issue("warning"),
+      issue("nit"),
+    ]);
     expect(counts.get("error")).toBe(1);
     expect(counts.get("warning")).toBe(1);
     expect(counts.get("nit")).toBe(1);

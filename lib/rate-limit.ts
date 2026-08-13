@@ -2,6 +2,7 @@ import "server-only";
 import { redis, ensureRedisConnection } from "@/lib/redis";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/log";
+import type { ErrorKind } from "@/lib/review/transcript";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -15,8 +16,7 @@ type Tier = {
 };
 
 export type RateLimitGate =
-  | { allowed: true }
-  | { allowed: false; retryAfterMs: number };
+  { allowed: true } | { allowed: false; retryAfterMs: number };
 
 const CHECK_AND_CONSUME = `
 local now = tonumber(ARGV[1])
@@ -53,7 +53,7 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
   const decide = (
     id: string,
     gate: RateLimitGate,
-    blockedTier: string | null
+    blockedTier: string | null,
   ): RateLimitGate => {
     log.debug(
       {
@@ -63,7 +63,7 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
         retryAfterMs: gate.allowed ? null : gate.retryAfterMs,
         redisReady: redis.isReady,
       },
-      "rate limit decision"
+      "rate limit decision",
     );
     return gate;
   };
@@ -73,10 +73,7 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
       try {
         const connectTimeout = timeoutAfter(CONNECT_TIMEOUT_MS);
         try {
-          await Promise.race([
-            ensureRedisConnection(),
-            connectTimeout.promise,
-          ]);
+          await Promise.race([ensureRedisConnection(), connectTimeout.promise]);
         } finally {
           connectTimeout.cancel();
         }
@@ -109,12 +106,12 @@ function createRateLimiter(prefix: string, tiers: Tier[]) {
         return decide(
           id,
           { allowed: false, retryAfterMs },
-          tiers[blocked - 1]?.label ?? null
+          tiers[blocked - 1]?.label ?? null,
         );
       } catch (error) {
         log.error(
           { err: error, id, allowed: true, redisReady: redis.isReady },
-          "rate limit check failed, allowing request"
+          "rate limit check failed, allowing request",
         );
         return { allowed: true };
       }
@@ -145,11 +142,14 @@ function formatWait(ms: number): string {
 }
 
 export function rateLimitResponse(
-  gate: Extract<RateLimitGate, { allowed: false }>
+  gate: Extract<RateLimitGate, { allowed: false }>,
 ): Response {
   return new Response(`Try again in ~${formatWait(gate.retryAfterMs)}.`, {
     status: 429,
-    headers: { "retry-after": String(Math.ceil(gate.retryAfterMs / 1000)) },
+    headers: {
+      "retry-after": String(Math.ceil(gate.retryAfterMs / 1000)),
+      "x-review-error": "rate-limit" satisfies ErrorKind,
+    },
   });
 }
 

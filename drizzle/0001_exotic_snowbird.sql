@@ -1,0 +1,1 @@
+ALTER TABLE "reviews" RENAME COLUMN "provider" TO "model_id";

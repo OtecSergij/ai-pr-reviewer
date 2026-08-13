@@ -7,7 +7,7 @@ import { IssueCard } from "@/app/components/issue-card";
 import { SEVERITY_STYLES, severityPills } from "@/app/components/review-theme";
 
 const loadReview = cache(async (slug: string) =>
-  isReviewSlug(slug) ? getReview(slug) : null
+  isReviewSlug(slug) ? getReview(slug) : null,
 );
 
 type Props = { params: Promise<{ slug: string }> };
@@ -76,7 +76,7 @@ export default async function SharedReviewPage({ params }: Props) {
           ) : null}
 
           <div className="mt-3 font-mono text-[11px] text-faint">
-            {review.provider} · head {review.headSha.slice(0, 7)} ·{" "}
+            {review.modelId} · head {review.headSha.slice(0, 7)} ·{" "}
             {review.createdAt.toISOString().slice(0, 10)}
           </div>
         </div>
@@ -94,7 +94,7 @@ export default async function SharedReviewPage({ params }: Props) {
         ) : null}
 
         <p className="mt-5 text-[12px] leading-[1.5] text-faint">
-          {review.provider.startsWith("claude")
+          {review.modelId.startsWith("claude")
             ? "AI-generated review — may contain mistakes."
             : "AI-generated review by a small free-tier model — may contain mistakes."}
         </p>

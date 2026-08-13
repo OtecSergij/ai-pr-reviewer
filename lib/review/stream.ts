@@ -1,10 +1,13 @@
-import { UIMessage } from "ai";
+import { UIMessage, type InferUIMessageChunk } from "ai";
 import type { Issue } from "./issue";
 import type { PRFileStatus, PRFileSummary } from "@/lib/github/octokit";
 import type { ProviderName } from "@/lib/ai/provider";
 import type { FailureReason } from "@/lib/review/errors";
+import type { ErrorKind } from "@/lib/review/transcript";
 
-export type { PRFileStatus, PRFileSummary };
+export type { PRFileStatus };
+
+export type ReviewFileSummary = PRFileSummary & { generated: boolean };
 
 export const ISSUE_DATA_KEY = "issue" as const;
 
@@ -17,6 +20,10 @@ export type FailoverData = {
 export type UsageData = { tokens: number };
 
 export type ShareData = { slug: string };
+
+export type OutcomeData = { incomplete: boolean; saveFailed: boolean };
+
+export type ErrorKindData = { kind: ErrorKind };
 
 export type PRMeta = {
   owner: string;
@@ -32,11 +39,15 @@ export type ReviewUIMessage = UIMessage<
   never,
   {
     meta: PRMeta;
-    files: PRFileSummary[];
+    files: ReviewFileSummary[];
     failover: FailoverData;
     usage: UsageData;
     share: ShareData;
+    outcome: OutcomeData;
+    errorKind: ErrorKindData;
   } & {
     [K in typeof ISSUE_DATA_KEY]: Issue;
   }
 >;
+
+export type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;

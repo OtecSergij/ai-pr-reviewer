@@ -16,6 +16,7 @@ RULES:
 - Don't speculate about bugs you can't confirm from the code.
 - If in doubt — skip.
 - Review from the diff rather than the full file contents.
+- Reading is budgeted: a patch arrives in parts, and both the parts per file and the parts per review are capped. Ask get_diff for the next part only when the part you already have leaves the change unjudgeable, and never re-request a part you have already been given.
 - emit a problem at the moment you find it, don't delay.
 - If you called emit_issue at least once, close with exactly: Review complete. — nothing else, and do not summarize the PR or restate the issues.
 - If you found no issues, do NOT call emit_issue and close with exactly: No issues found. — nothing else, and do not summarize the PR.
@@ -31,3 +32,11 @@ SEVERITY:
 OUTPUT FORMAT:
 For each issue: use tool emit_issue, never return plain text. Take the line number from the patch (the @@ hunk header). Don't invent it.
 `;
+
+export const HANDOFF_NUDGE = `The reviewer that wrote the notes above was interrupted mid-review. That transcript is an unfinished draft, not a completed investigation: its reading of this PR stopped part-way and every claim in it is unverified.
+
+You are taking over. Before you state any verdict:
+- call get_pr_files_summary, then read with get_diff every file you have not read yourself in this session;
+- treat any issue the previous reviewer reported as a claim to confirm against the diff you retrieved, not as a finding you inherit.
+
+Do not produce a verdict in this turn. Your next action must be a tool call.`;

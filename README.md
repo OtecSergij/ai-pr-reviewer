@@ -22,15 +22,15 @@ An AI agent that reviews GitHub pull requests: it walks the repository, reads th
 
 ## Known limits
 
-- PRs with more than 15 changed files are rejected up front.
-- Reviews are rate-limited per IP; the budgets live in `lib/rate-limit.ts`.
-- Oversized inputs are cut honestly rather than silently: large patches are truncated at a hunk boundary, oversized files are refused, and the model is told about both. Files that look machine-generated (build output, lockfiles, minified bundles) are flagged so the agent skips them.
+- PRs with more than 15 reviewable changed files are rejected up front; generated files (build output, lockfiles, minified bundles) do not count against that limit.
+- Reviews are rate-limited per IP; the budgets live in `lib/rate-limit.ts`. The review slot is taken before the run starts and is never refunded, so a review that fails — or a PR refused as private or oversized — still costs one; the URL is parsed before that slot, so a typo doesn't burn it.
+- Oversized inputs are paginated or refused honestly rather than cut silently: a large patch is served in parts split at hunk boundaries — and inside a hunk too large to serve whole, at line boundaries, so a file added in one hunk cannot arrive as a single unbounded blob. The agent asks for the next part when it needs one, under a budget per file and per review, so a file read only in part is marked as such in the sidebar. Whole-file reads carry their own per-review byte budget; oversized files are refused with a pointer back to the diff. Files that look machine-generated (build output, lockfiles, minified bundles) are flagged so the agent skips them.
 - A run that exhausts a free model's output limit is handed to the next provider in the chain; if the last one is also cut short, the review ends as "Review cut short" and is not saved — only reviews that ran to completion get a share link. Bringing your own Anthropic key usually covers more.
-- The agent runs under a hard step ceiling to bound cost and latency.
+- The free chain runs under a hard step ceiling to bound cost and latency. A review on your own Anthropic key runs without one — your key, your budget.
 
 ## Local development
 
-Requires a local PostgreSQL and Redis.
+Requires Node 26 (see `.nvmrc`), plus local PostgreSQL and Redis.
 
 ```bash
 cp .env.example .env.local   # provider keys, GITHUB_PAT, DATABASE_URL, REDIS_URL
@@ -41,4 +41,16 @@ npm run dev
 
 Open http://localhost:3000.
 
-Startup validates the env and fails fast while anything is missing: real reviews need the provider keys and `GITHUB_PAT` filled in (plus Postgres and Redis). To boot without any keys, use the keyless demo below.
+Startup validates the env and fails fast while anything is missing: real reviews need the provider keys and `GITHUB_PAT` filled in (plus Postgres and Redis). To boot with no keys at all, set `MOCK_REVIEW=1` — with the rest of the `MOCK_*` variables documented in `.env.example`, it streams a fixture review instead of calling a model.
+
+## Self-hosting
+
+The image that CI publishes to GHCR on every push to `main` is the whole deployment — it needs an env file and a port:
+
+```bash
+docker run --env-file .env.local -p 3000:3000 ghcr.io/otecsergij/ai-pr-reviewer:latest
+```
+
+The entrypoint applies the migrations and then starts the server, so the image needs nothing besides that file — every variable it reads is annotated in `.env.example`. One caveat: `DATABASE_URL` and `REDIS_URL` have to resolve from inside the container, so a `localhost` carried over from local development points at the container itself. Either join their docker network (`--network`, with the Postgres and Redis container names as the hostnames) or use `host.docker.internal` — which on Linux also takes `--add-host=host.docker.internal:host-gateway`.
+
+Production is redeployed by a Coolify webhook that CI calls with two repo secrets, `COOLIFY_DEPLOY_URL` and `COOLIFY_TOKEN`; a fork without them skips the deploy step instead of failing it.

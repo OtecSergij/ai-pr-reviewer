@@ -25,7 +25,7 @@ describe("reviewSlug", () => {
         repo: "next.js",
         prNumber: 123,
         headSha: "abcdef0",
-      })
+      }),
     );
   });
 
@@ -46,7 +46,7 @@ describe("reviewSlug", () => {
 
 describe("isReviewSlug", () => {
   it("accepts an 11-char alphanumeric string", () => {
-    expect(isReviewSlug("aB3dEf0GhiJ")).toBe(true);
+    expect(isReviewSlug("LygHa16AHYF")).toBe(true);
   });
 
   it("rejects the wrong length", () => {

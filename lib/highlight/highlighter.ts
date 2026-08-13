@@ -54,18 +54,18 @@ function getShiki(): Promise<LoadedShiki> {
 }
 
 const langLoads = new Map<string, Promise<boolean>>(
-  PRELOAD_LANGS.map((lang) => [lang, Promise.resolve(true)])
+  PRELOAD_LANGS.map((lang) => [lang, Promise.resolve(true)]),
 );
 
 function ensureLangLoaded(
   highlighter: ShikiHighlighter,
-  lang: BundledLanguage
+  lang: BundledLanguage,
 ): Promise<boolean> {
   let loaded = langLoads.get(lang);
   if (!loaded) {
     loaded = highlighter.loadLanguage(lang).then(
       () => true,
-      () => false
+      () => false,
     );
     langLoads.set(lang, loaded);
   }
@@ -74,7 +74,7 @@ function ensureLangLoaded(
 
 async function resolveLang(
   shiki: LoadedShiki,
-  raw: string
+  raw: string,
 ): Promise<BundledLanguage | SpecialLanguage> {
   const key = (raw || "").toLowerCase();
   const candidate = EXT_TO_LANG[key] ?? key;
@@ -85,7 +85,7 @@ async function resolveLang(
 
 export async function highlightCode(
   code: string,
-  rawLang: string
+  rawLang: string,
 ): Promise<ThemedToken[][]> {
   const shiki = await getShiki();
   const { tokens } = shiki.highlighter.codeToTokens(code, {

@@ -152,10 +152,10 @@ describe("listDirectory on something that is not a directory", () => {
     const client = clientReturning(file("index.js", "index.js"));
 
     await expect(list(client, "index.js")).rejects.toBeInstanceOf(
-      GitHubApiError
+      GitHubApiError,
     );
     await expect(list(client, "index.js")).rejects.toThrow(
-      "Expected directory at index.js, got file"
+      "Expected directory at index.js, got file",
     );
   });
 });
@@ -166,7 +166,7 @@ describe("listDirectory error translation", () => {
 
     await expect(list(client, "lib")).rejects.toBeInstanceOf(NotFoundError);
     await expect(list(client, "lib")).rejects.toThrow(
-      `directory ${OWNER}/${REPO}@${REF}:lib was not found`
+      `directory ${OWNER}/${REPO}@${REF}:lib was not found`,
     );
   });
 
@@ -174,7 +174,7 @@ describe("listDirectory error translation", () => {
     const client = clientFailing(notFound(""));
 
     await expect(list(client, "")).rejects.toThrow(
-      `directory ${OWNER}/${REPO}@${REF}:/ was not found`
+      `directory ${OWNER}/${REPO}@${REF}:/ was not found`,
     );
   });
 });

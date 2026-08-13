@@ -15,7 +15,7 @@ const EnvSchema = z.object({
     .transform((v) => v === "1"),
   APP_URL: z.preprocess(
     (v) => (v === "" ? undefined : v),
-    z.string().url().default(DEFAULT_APP_URL)
+    z.url().default(DEFAULT_APP_URL),
   ),
   MOCK_REVIEW: z
     .enum(["1", "0", ""])
@@ -49,7 +49,7 @@ const EnvSchema = z.object({
         "first-only",
         "mid-stream",
       ])
-      .optional()
+      .optional(),
   ),
   MOCK_SCENARIO: z.preprocess(
     (v) => (v === "" ? undefined : v),
@@ -63,7 +63,7 @@ const EnvSchema = z.object({
         "reasoning",
         "finish-length",
       ])
-      .optional()
+      .optional(),
   ),
 });
 

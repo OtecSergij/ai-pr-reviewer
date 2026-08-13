@@ -8,7 +8,7 @@ import {
 } from "@/lib/github/octokit";
 import { basename } from "@/lib/path";
 import { enrichIssue } from "@/lib/review/enrich-issue";
-import { MAX_FILE_CONTENTS_BYTES } from "@/lib/review/tools/review-tools";
+import { MAX_FILE_CONTENTS_BYTES } from "@/lib/review/config";
 import { createFixtureGithubAccess } from "./github-fixture";
 import { mockModelIssues, richModelIssues } from "./issues";
 
@@ -24,8 +24,16 @@ const patchOf = async (filename: string): Promise<string> => {
   return patch;
 };
 
+const contentsOf = async (path: string) =>
+  gh.getFileContents({
+    path,
+    ref: await headSha(),
+    maxBytes: MAX_FILE_CONTENTS_BYTES,
+  });
+
 const contentLines = async (path: string): Promise<string[]> => {
-  const { content } = await gh.getFileContents({ path, ref: await headSha() });
+  const { content } = await contentsOf(path);
+  if (content === null) expect.unreachable(`${path} was refused as too large`);
   return content.split("\n");
 };
 
@@ -47,13 +55,13 @@ describe("fixture patches line up with file contents", () => {
           lastNewLineno = line.newLineno;
           expect(
             lines[line.newLineno - 1],
-            `${file.filename}:${line.newLineno} (${line.kind})`
+            `${file.filename}:${line.newLineno} (${line.kind})`,
           ).toBe(line.content);
         }
 
         expect(
           lastNewLineno,
-          `${file.filename} hunk ending at ${hunk.newEnd}`
+          `${file.filename} hunk ending at ${hunk.newEnd}`,
         ).toBe(hunk.newEnd);
       }
     }
@@ -98,11 +106,9 @@ describe("fixture files stay readable through the file-contents tool", () => {
     expect(files.length).toBeGreaterThan(0);
 
     for (const entry of files) {
-      const { size } = await gh.getFileContents({
-        path: entry.path,
-        ref: await headSha(),
-      });
+      const { size, content } = await contentsOf(entry.path);
       expect(size, entry.path).toBeLessThanOrEqual(MAX_FILE_CONTENTS_BYTES);
+      expect(content, entry.path).not.toBeNull();
     }
   });
 });
@@ -112,7 +118,7 @@ describe("fixture directory listing", () => {
     const entries = await gh.listDirectory({ path: "", ref: await headSha() });
 
     expect(
-      entries.map((entry) => ({ path: entry.path, type: entry.type }))
+      entries.map((entry) => ({ path: entry.path, type: entry.type })),
     ).toEqual([
       { path: "README.md", type: "file" },
       { path: "index.js", type: "file" },
@@ -150,26 +156,35 @@ describe("fixture directory listing", () => {
 
 describe("fixture error paths", () => {
   it("rejects a file that is not in the fixture", async () => {
-    await expect(
-      gh.getFileContents({ path: "src/parse.ts", ref: await headSha() })
-    ).rejects.toBeInstanceOf(NotFoundError);
+    await expect(contentsOf("src/parse.ts")).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it("rejects a directory that is not in the fixture", async () => {
     await expect(
-      gh.listDirectory({ path: "lib", ref: await headSha() })
+      gh.listDirectory({ path: "lib", ref: await headSha() }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("rejects reading a directory as a file", async () => {
-    await expect(
-      gh.getFileContents({ path: "test", ref: await headSha() })
-    ).rejects.toBeInstanceOf(GitHubApiError);
+    await expect(contentsOf("test")).rejects.toBeInstanceOf(GitHubApiError);
+  });
+
+  it("refuses a file over the cap instead of returning its content", async () => {
+    const { content, size } = await gh.getFileContents({
+      path: "index.js",
+      ref: await headSha(),
+      maxBytes: 10,
+    });
+
+    expect(content).toBeNull();
+    expect(size).toBeGreaterThan(10);
   });
 
   it("rejects listing a file as a directory", async () => {
     await expect(
-      gh.listDirectory({ path: "index.js", ref: await headSha() })
+      gh.listDirectory({ path: "index.js", ref: await headSha() }),
     ).rejects.toBeInstanceOf(GitHubApiError);
   });
 
@@ -197,17 +212,17 @@ describe("fixture issues enrich into rendered code", () => {
 
       for (const target of targets) {
         expect(target.lineno, `${issue.file} target`).toBeGreaterThanOrEqual(
-          issue.line_start
+          issue.line_start,
         );
         expect(target.lineno, `${issue.file} target`).toBeLessThanOrEqual(
-          issue.line_end
+          issue.line_end,
         );
       }
 
       for (const line of enriched.codeLines) {
         if (line.lineno === null) continue;
         expect(lines[line.lineno - 1], `${issue.file}:${line.lineno}`).toBe(
-          line.content
+          line.content,
         );
       }
     }

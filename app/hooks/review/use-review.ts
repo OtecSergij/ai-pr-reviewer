@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FinishReason, InferUIMessageChunk } from "ai";
+import type { FinishReason } from "ai";
 import type { Issue } from "@/lib/review/issue";
 import type {
-  PRFileSummary,
+  OutcomeData,
   PRMeta,
-  ReviewUIMessage,
+  ReviewChunk,
+  ReviewFileSummary,
 } from "@/lib/review/stream";
+import { nextFinishReason } from "@/lib/review/finish-reason";
 import type {
   ErrorKind,
   ReviewStatus,
@@ -18,14 +20,20 @@ import {
   isDegenerateText,
   isErrorKind,
   isTextEntry,
+  patchPartOf,
   revealTranscript,
   totalTextChars,
 } from "@/lib/review/transcript";
 
-type ReviewChunk = InferUIMessageChunk<ReviewUIMessage>;
-
 const REVEAL_CHARS_PER_SECOND = 200;
 const NOMINAL_FRAME_MS = 1000 / 60;
+const STALL_TICK_MS = 1000;
+const STALL_NOTICE_MS = 8_000;
+const STALL_ESCALATION_MS = 30_000;
+const STALL_NOTICES = [
+  "Waiting on the provider — free-tier responses can take a while.",
+  "Still waiting — a rate-limited provider can pause for up to a minute before retrying.",
+] as const;
 
 export type ReviewRunOptions = {
   anthropicKey?: string;
@@ -35,14 +43,14 @@ export type ReviewRunOptions = {
 function findToolEntry(entries: TranscriptEntry[], toolCallId: string) {
   return entries.find(
     (e): e is Extract<TranscriptEntry, { kind: "tool" }> =>
-      e.kind === "tool" && e.toolCallId === toolCallId
+      e.kind === "tool" && e.toolCallId === toolCallId,
   );
 }
 
 function appendDelta(
   entries: TranscriptEntry[],
   kind: TranscriptTextKind,
-  delta: string
+  delta: string,
 ): void {
   const last = entries[entries.length - 1];
   if (last && isTextEntry(last) && last.kind === kind) {
@@ -60,6 +68,10 @@ function errorKindFromResponse(res: Response): ErrorKind {
   return "load";
 }
 
+function newRequestId(): string | null {
+  return typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : null;
+}
+
 export function useReview() {
   const [status, setStatus] = useState<ReviewStatus>("idle");
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -68,11 +80,13 @@ export function useReview() {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [finishReason, setFinishReason] = useState<FinishReason | null>(null);
+  const [outcome, setOutcome] = useState<OutcomeData | null>(null);
   const [meta, setMeta] = useState<PRMeta | null>(null);
-  const [files, setFiles] = useState<PRFileSummary[]>([]);
+  const [files, setFiles] = useState<ReviewFileSummary[]>([]);
   const [totalTokens, setTotalTokens] = useState(0);
   const [shareSlug, setShareSlug] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [stallLevel, setStallLevel] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
   const transcriptRef = useRef<TranscriptEntry[]>([]);
@@ -80,6 +94,7 @@ export function useReview() {
   const rafRef = useRef<number | null>(null);
   const revealedRef = useRef(0);
   const lastFrameAtRef = useRef<number | null>(null);
+  const lastNetworkAtRef = useRef<number | null>(null);
 
   const scheduleCommit = useCallback(() => {
     if (rafRef.current != null) return;
@@ -94,7 +109,7 @@ export function useReview() {
           : now - lastFrameAtRef.current;
       const step = Math.max(
         1,
-        Math.round((REVEAL_CHARS_PER_SECOND * dt) / 1000)
+        Math.round((REVEAL_CHARS_PER_SECOND * dt) / 1000),
       );
       const revealed = Math.min(total, revealedRef.current + step);
       revealedRef.current = revealed;
@@ -121,12 +136,15 @@ export function useReview() {
   const clearReviewState = useCallback(() => {
     transcriptRef.current = [];
     flushTranscript();
+    lastNetworkAtRef.current = null;
+    setStallLevel(0);
     toolEntriesRef.current = [];
     setToolEntries([]);
     setIssues([]);
     setError(null);
     setErrorKind(null);
     setFinishReason(null);
+    setOutcome(null);
     setMeta(null);
     setFiles([]);
     setTotalTokens(0);
@@ -140,14 +158,21 @@ export function useReview() {
 
       clearReviewState();
       setStatus("running");
+      lastNetworkAtRef.current = Date.now();
 
       const ac = new AbortController();
       abortRef.current = ac;
 
+      const sentRequestId = newRequestId();
+      setRequestId(sentRequestId);
+
       try {
         const res = await fetch("/api/review", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(sentRequestId ? { "x-request-id": sentRequestId } : {}),
+          },
           body: JSON.stringify({
             prUrl,
             anthropicKey: options.anthropicKey,
@@ -156,7 +181,7 @@ export function useReview() {
           signal: ac.signal,
         });
 
-        setRequestId(res.headers.get("x-request-id"));
+        setRequestId(res.headers.get("x-request-id") ?? sentRequestId);
 
         if (!res.ok || !res.body) {
           const text = (await res.text().catch(() => "")).trim();
@@ -170,10 +195,12 @@ export function useReview() {
         const decoder = new TextDecoder();
         let buffer = "";
         let streamError: string | null = null;
+        let streamErrorKind: ErrorKind | null = null;
         const openBlocks = new Map<string, number>();
 
         while (true) {
           const { value, done } = await reader.read();
+          lastNetworkAtRef.current = Date.now();
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
@@ -225,11 +252,14 @@ export function useReview() {
                   ) {
                     entry.outcome = "skipped";
                     entry.note = String(
-                      (output as Record<string, unknown>).status
+                      (output as Record<string, unknown>).status,
                     );
                   } else {
                     entry.outcome = "ok";
                   }
+                  const patchPart = patchPartOf(output);
+                  if (patchPart) entry.patchPart = patchPart;
+                  setToolEntries(toolEntriesRef.current.slice());
                   scheduleCommit();
                 }
                 break;
@@ -250,7 +280,7 @@ export function useReview() {
 
               case "data-meta":
                 setMeta(chunk.data);
-                setFinishReason(null);
+                setFinishReason((current) => nextFinishReason(current, chunk));
                 break;
 
               case "data-files":
@@ -268,6 +298,14 @@ export function useReview() {
 
               case "data-share":
                 setShareSlug(chunk.data.slug);
+                break;
+
+              case "data-outcome":
+                setOutcome(chunk.data);
+                break;
+
+              case "data-errorKind":
+                streamErrorKind = chunk.data.kind;
                 break;
 
               case "text-start":
@@ -338,7 +376,7 @@ export function useReview() {
                 break;
 
               case "finish":
-                setFinishReason(chunk.finishReason ?? null);
+                setFinishReason((current) => nextFinishReason(current, chunk));
                 break;
 
               default:
@@ -349,7 +387,7 @@ export function useReview() {
 
         if (streamError) {
           setError(streamError);
-          setErrorKind("review");
+          setErrorKind(streamErrorKind ?? "review");
           setStatus("error");
         } else {
           setStatus("done");
@@ -367,7 +405,7 @@ export function useReview() {
         flushTranscript();
       }
     },
-    [clearReviewState, flushTranscript, scheduleCommit]
+    [clearReviewState, flushTranscript, scheduleCommit],
   );
 
   const stop = useCallback(() => {
@@ -381,12 +419,26 @@ export function useReview() {
     setStatus("idle");
   }, [clearReviewState]);
 
+  useEffect(() => {
+    if (status !== "running") return;
+
+    const timer = setInterval(() => {
+      const since = lastNetworkAtRef.current;
+      const idleMs = since === null ? 0 : Date.now() - since;
+      setStallLevel(
+        idleMs >= STALL_ESCALATION_MS ? 2 : idleMs >= STALL_NOTICE_MS ? 1 : 0,
+      );
+    }, STALL_TICK_MS);
+
+    return () => clearInterval(timer);
+  }, [status]);
+
   useEffect(
     () => () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       abortRef.current?.abort();
     },
-    []
+    [],
   );
 
   return {
@@ -400,10 +452,15 @@ export function useReview() {
     error,
     errorKind,
     finishReason,
+    outcome,
     meta,
     files,
     totalTokens,
     shareSlug,
     requestId,
+    stallNotice:
+      status === "running" && stallLevel > 0
+        ? STALL_NOTICES[stallLevel - 1]
+        : null,
   };
 }

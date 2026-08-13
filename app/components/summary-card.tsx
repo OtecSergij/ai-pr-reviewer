@@ -9,13 +9,14 @@ import { CopyButton } from "./copy-button";
 type SummaryCardProps = {
   issues: Issue[];
   meta: PRMeta | null;
-  stepCount: number;
+  toolCallCount: number;
   elapsed: number;
   stopped: boolean;
   truncated: boolean;
   usedOwnKey: boolean;
   isPrivate: boolean;
   shareSlug: string | null;
+  saveFailed: boolean;
 };
 
 const OUTCOME = {
@@ -41,38 +42,44 @@ const PRIVATE_NOTICE =
 const STOPPED_NOTICE =
   "Stopped reviews are not saved — run the review to completion to get a share link.";
 const TRUNCATED_FREE_NOTICE =
-  "This PR is too large for the free model to review in full — partial results aren't saved. Running with your own Anthropic key usually covers more.";
+  "The free models couldn't carry this review to the end — partial results aren't saved. Running with your own Anthropic key usually covers more.";
 const TRUNCATED_OWN_KEY_NOTICE =
-  "This PR is too large to review in full — partial results aren't saved.";
+  "This review didn't run to the end — partial results aren't saved.";
+const SAVE_FAILED_NOTICE =
+  "Couldn't create a share link — run the review again to get one.";
 
 function noticeText({
   isPrivate,
   stopped,
   truncated,
   usedOwnKey,
+  saveFailed,
 }: {
   isPrivate: boolean;
   stopped: boolean;
   truncated: boolean;
   usedOwnKey: boolean;
+  saveFailed: boolean;
 }): string | null {
   if (isPrivate) return PRIVATE_NOTICE;
   if (stopped) return STOPPED_NOTICE;
   if (truncated)
     return usedOwnKey ? TRUNCATED_OWN_KEY_NOTICE : TRUNCATED_FREE_NOTICE;
+  if (saveFailed) return SAVE_FAILED_NOTICE;
   return null;
 }
 
 export function SummaryCard({
   issues,
   meta,
-  stepCount,
+  toolCallCount,
   elapsed,
   stopped,
   truncated,
   usedOwnKey,
   isPrivate,
   shareSlug,
+  saveFailed,
 }: SummaryCardProps) {
   const pills = severityPills(issues);
 
@@ -86,12 +93,18 @@ export function SummaryCard({
     stopped || truncated
       ? null
       : `Found ${n} issue${n === 1 ? "" : "s"} in ${repo}.`;
-  const notice = noticeText({ isPrivate, stopped, truncated, usedOwnKey });
+  const notice = noticeText({
+    isPrivate,
+    stopped,
+    truncated,
+    usedOwnKey,
+    saveFailed,
+  });
   const onSonnet = meta?.model?.startsWith("claude") ?? usedOwnKey;
   const head = meta?.headSha ? `head ${meta.headSha.slice(0, 7)}` : null;
   const doneMeta = [
     meta?.model,
-    `${stepCount} steps`,
+    `${toolCallCount} tool calls`,
     formatElapsed(elapsed),
     head,
   ]

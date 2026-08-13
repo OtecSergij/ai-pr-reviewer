@@ -2,10 +2,10 @@
 
 import { memo, useMemo } from "react";
 import { basename, dirname } from "@/lib/path";
-import type { PRFileSummary } from "@/lib/review/stream";
+import type { ReviewFileSummary } from "@/lib/review/stream";
 import type { Issue } from "@/lib/review/issue";
 import type { TranscriptEntry } from "@/lib/review/transcript";
-import { toolPath } from "@/lib/review/transcript";
+import { partiallyReadFiles, toolPath } from "@/lib/review/transcript";
 import { countBySeverity } from "@/lib/review/issue-stats";
 import { Spinner } from "./spinner";
 import {
@@ -16,7 +16,7 @@ import {
 } from "./review-theme";
 
 type ChangedFilesSidebarProps = {
-  files: PRFileSummary[];
+  files: ReviewFileSummary[];
   issues: Issue[];
   toolEntries: TranscriptEntry[];
   running: boolean;
@@ -38,7 +38,7 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
 }: ChangedFilesSidebarProps) {
   const changedSet = useMemo(
     () => new Set(files.map((f) => f.filename)),
-    [files]
+    [files],
   );
 
   const { activeFile, visited } = useMemo(() => {
@@ -59,6 +59,8 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
 
     return { activeFile, visited };
   }, [toolEntries, changedSet, running]);
+
+  const partial = useMemo(() => partiallyReadFiles(toolEntries), [toolEntries]);
 
   const dotsByFile = useMemo(() => {
     const byFile = new Map<string, Issue[]>();
@@ -109,6 +111,7 @@ export const ChangedFilesSidebar = memo(function ChangedFilesSidebar({
               file={file}
               active={file.filename === activeFile}
               visited={visited.has(file.filename)}
+              partial={partial.has(file.filename)}
               filtered={file.filename === fileFilter}
               dots={dotsByFile.get(file.filename)}
               onClick={() => onFileClick(file.filename)}
@@ -145,13 +148,15 @@ function FileRow({
   file,
   active,
   visited,
+  partial,
   filtered,
   dots,
   onClick,
 }: {
-  file: PRFileSummary;
+  file: ReviewFileSummary;
   active: boolean;
   visited: boolean;
+  partial: boolean;
   filtered: boolean;
   dots?: Map<Issue["severity"], number>;
   onClick: () => void;
@@ -169,8 +174,8 @@ function FileRow({
   const bg = active
     ? "animate-file-pulse"
     : filtered
-    ? "bg-surface-subtle"
-    : "bg-white";
+      ? "bg-surface-subtle"
+      : "bg-white";
 
   const border = filtered ? "border-[#a5b4fc]" : "border-border-subtle";
 
@@ -178,8 +183,10 @@ function FileRow({
     file.filename,
     file.status,
     `${file.additions} added, ${file.deletions} removed`,
+    ...(file.generated ? ["generated"] : []),
     ...dotList.map((d) => severityCountLabel(d.severity, d.count)),
-    ...(visited ? ["read"] : []),
+    ...(visited ? [partial ? "read in part" : "read"] : []),
+    ...(filtered ? ["filtering issues"] : []),
   ].join(", ");
 
   return (
@@ -202,6 +209,13 @@ function FileRow({
         </span>
         {active ? (
           <Spinner className="h-2.5 w-2.5 shrink-0 border-[#c7d2fe] border-t-[#4f46e5]" />
+        ) : visited && partial ? (
+          <span
+            aria-hidden="true"
+            className="shrink-0 font-mono text-[10px] font-semibold text-[#9a6700]"
+          >
+            partial
+          </span>
         ) : visited ? (
           <span
             aria-hidden="true"
@@ -221,6 +235,14 @@ function FileRow({
           <span className="text-[#1a7f37]">+{file.additions}</span>{" "}
           <span className="text-[#cf222e]">−{file.deletions}</span>
         </span>
+        {file.generated ? (
+          <span
+            aria-hidden="true"
+            className="font-mono text-[10.5px] text-[#9ca3af]"
+          >
+            generated
+          </span>
+        ) : null}
         {dotList.length > 0 ? (
           <span aria-hidden="true" className="flex items-center gap-1.5">
             {dotList.map((d) => (

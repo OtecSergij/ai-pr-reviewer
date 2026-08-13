@@ -1,18 +1,8 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import { connection } from "next/server";
 import { env, DEFAULT_APP_URL } from "@/lib/env";
+import { FONT_VARIABLES } from "./fonts";
 import "./globals.css";
-
-const instrumentSans = Instrument_Sans({
-  subsets: ["latin"],
-  variable: "--font-instrument-sans",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
-});
 
 const title = "AI PR Reviewer";
 const description =
@@ -42,10 +32,7 @@ export default async function RootLayout({
 }>) {
   await connection();
   return (
-    <html
-      lang="en"
-      className={`${instrumentSans.variable} ${jetbrainsMono.variable}`}
-    >
+    <html lang="en" className={FONT_VARIABLES}>
       <body>{children}</body>
     </html>
   );
