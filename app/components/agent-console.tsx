@@ -86,7 +86,7 @@ export const AgentConsole = memo(function AgentConsole({
         </span>
         <button
           onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
+          aria-expanded={trace ? open : undefined}
           aria-controls={bodyShown ? bodyId : undefined}
           className="shrink-0 rounded-md border border-border bg-white px-2.5 py-1 text-[11px] font-semibold text-muted hover:border-[#c7c7cd]"
         >

@@ -42,9 +42,9 @@ const PRIVATE_NOTICE =
 const STOPPED_NOTICE =
   "Stopped reviews are not saved — run the review to completion to get a share link.";
 const TRUNCATED_FREE_NOTICE =
-  "This PR is too large for the free model to review in full — partial results aren't saved. Running with your own Anthropic key usually covers more.";
+  "The free models couldn't carry this review to the end — partial results aren't saved. Running with your own Anthropic key usually covers more.";
 const TRUNCATED_OWN_KEY_NOTICE =
-  "This PR is too large to review in full — partial results aren't saved.";
+  "This review didn't run to the end — partial results aren't saved.";
 const SAVE_FAILED_NOTICE =
   "Couldn't create a share link — run the review again to get one.";
 
