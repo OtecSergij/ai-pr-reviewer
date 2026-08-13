@@ -45,3 +45,5 @@ next-env.d.ts
 # local tooling (not published)
 /.claude/
 /docs/CODE_REVIEW.md
+/docs/CODE_REVIEW_VERIFICATION.md
+/docs/epics/
