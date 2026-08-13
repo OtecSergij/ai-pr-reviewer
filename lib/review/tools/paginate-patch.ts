@@ -14,25 +14,22 @@ const splitHunks = (patch: string): string[] => {
   return hunks;
 };
 
-export const splitPatch = (
-  patch: string,
-  cap: number = PATCH_PART_CHARS,
-): string[] => {
+const pack = (units: string[], cap: number): string[] => {
   const parts: string[] = [];
   let kept: string[] = [];
   let size = 0;
 
-  for (const hunk of splitHunks(patch)) {
-    const nextSize = kept.length === 0 ? hunk.length : size + 1 + hunk.length;
+  for (const unit of units) {
+    const nextSize = kept.length === 0 ? unit.length : size + 1 + unit.length;
 
     if (kept.length > 0 && nextSize > cap) {
       parts.push(kept.join("\n"));
-      kept = [hunk];
-      size = hunk.length;
+      kept = [unit];
+      size = unit.length;
       continue;
     }
 
-    kept.push(hunk);
+    kept.push(unit);
     size = nextSize;
   }
 
@@ -42,3 +39,26 @@ export const splitPatch = (
 
   return parts;
 };
+
+const splitHunk = (hunk: string, cap: number): string[] => {
+  const [header, ...body] = hunk.split("\n");
+  if (body.length === 0) return [header];
+
+  const [first = "", ...rest] = pack(
+    body,
+    Math.max(1, cap - header.length - 1),
+  );
+
+  return [`${header}\n${first}`, ...rest];
+};
+
+export const splitPatch = (
+  patch: string,
+  cap: number = PATCH_PART_CHARS,
+): string[] =>
+  pack(
+    splitHunks(patch).flatMap((hunk) =>
+      hunk.length <= cap ? [hunk] : splitHunk(hunk, cap),
+    ),
+    cap,
+  );

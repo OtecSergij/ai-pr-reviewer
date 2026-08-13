@@ -29,25 +29,54 @@ describe("splitPatch", () => {
     }
   });
 
-  it("hands back an oversized first hunk whole instead of dropping it", () => {
-    const huge = hunk(1, PATCH_PART_CHARS + 1);
-    const small = hunk(500, 100);
-    const patch = [huge, small].join("\n");
+  it("splits an oversized hunk at line boundaries instead of handing it back whole", () => {
+    const body = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join("\n");
+    const huge = `@@ -1,600 +1,600 @@\n${body}`;
+    const patch = [huge, hunk(900, 100)].join("\n");
+
+    expect(huge.length).toBeGreaterThan(PATCH_PART_CHARS);
 
     const parts = splitPatch(patch);
 
-    expect(parts).toEqual([huge, small]);
-    expect(parts[0].length).toBeGreaterThan(PATCH_PART_CHARS);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(PATCH_PART_CHARS);
+    }
     expect(parts.join("\n")).toBe(patch);
   });
 
-  it("gives an oversized hunk in the middle a part of its own", () => {
+  it("keeps the hunk header with the first part it splits off", () => {
+    const body = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join("\n");
+    const header = "@@ -1,600 +1,600 @@";
+
+    const parts = splitPatch(`${header}\n${body}`);
+
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts[0].startsWith(`${header}\n`)).toBe(true);
+  });
+
+  it("splits an oversized hunk in the middle without losing its neighbours", () => {
     const first = hunk(1, 1_000);
-    const huge = hunk(100, PATCH_PART_CHARS + 500);
+    const body = Array.from({ length: 300 }, (_, i) => `+mid ${i}`).join("\n");
+    const huge = `@@ -100,300 +100,300 @@\n${body}`;
     const last = hunk(900, 1_000);
     const patch = [first, huge, last].join("\n");
 
-    expect(splitPatch(patch)).toEqual([first, huge, last]);
+    const parts = splitPatch(patch);
+
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(PATCH_PART_CHARS);
+    }
+    expect(parts.join("\n")).toBe(patch);
+  });
+
+  it("keeps a single line longer than the cap intact, because it has no boundary inside", () => {
+    const huge = hunk(1, PATCH_PART_CHARS + 500);
+
+    const parts = splitPatch(huge);
+
+    expect(parts).toEqual([huge]);
+    expect(parts[0].length).toBeGreaterThan(PATCH_PART_CHARS);
   });
 
   it("keeps a patch of exactly the cap whole and splits one char over it", () => {

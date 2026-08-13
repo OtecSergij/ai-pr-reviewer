@@ -15,3 +15,5 @@ export const MAX_PART_REPEATS = 3;
 export const BODY_CAP = 10_000;
 
 export const MAX_FILE_CONTENTS_BYTES = 18_000;
+
+export const FILE_READ_BUDGET_BYTES = 60_000;

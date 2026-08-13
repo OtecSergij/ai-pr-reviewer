@@ -70,6 +70,7 @@ export function statusLabel(status?: string): string {
     case "no_such_part":
       return "no such part";
     case "part_limit":
+    case "read_limit":
       return "read limit reached";
     case "unavailable":
       return "unavailable";

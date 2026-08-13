@@ -13,6 +13,7 @@ import { REVIEW_TOOL_NAMES, type ReviewToolName } from "./tool-names";
 import { enrichIssue } from "@/lib/review/enrich-issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 import {
+  FILE_READ_BUDGET_BYTES,
   MAX_FILE_CONTENTS_BYTES,
   MAX_PARTS_PER_FILE,
   MAX_PART_REPEATS,
@@ -82,7 +83,19 @@ export function createReviewTools(
 ) {
   const partRequests = new Map<string, number>();
   const partsPaid = new Set<string>();
+  const partsByFile = new Map<string, string[]>();
+  const filesPaid = new Set<string>();
   let patchCharsSpent = 0;
+  let fileBytesSpent = 0;
+
+  const partsOf = (filename: string, patch: string): string[] => {
+    let parts = partsByFile.get(filename);
+    if (!parts) {
+      parts = splitPatch(patch);
+      partsByFile.set(filename, parts);
+    }
+    return parts;
+  };
 
   const servePatchPart = (
     filename: string,
@@ -196,7 +209,7 @@ previous_filename: old file name, if it was renamed.`,
                   additions: f.additions,
                   deletions: f.deletions,
                   changes: f.changes,
-                  diff_parts: patch ? splitPatch(patch).length : 0,
+                  diff_parts: patch ? partsOf(f.filename, patch).length : 0,
                   generated: isGeneratedPath(f.filename),
                   previous_filename: f.previousFilename,
                 };
@@ -235,7 +248,7 @@ part_limit – you asked for a part you are not allowed to read; scope says whic
 
           return servePatchPart(
             input.filename,
-            splitPatch(diff),
+            partsOf(input.filename, diff),
             input.part ?? 1,
           );
         }),
@@ -244,12 +257,20 @@ part_limit – you asked for a part you are not allowed to read; scope says whic
       description: `Returns the full content of a single file at the PR's head state. Call get_file_contents only when the diff alone is insufficient to judge the change — for example, when a referenced symbol is defined outside the diff, or when you need to see how the changed code is used elsewhere in the file. If the change is self-contained and the diff gives you everything you need, do not fetch the file. Returns { content, size } in the success case. Returns {status, reason} if there is a problem:
 not_found – the file doesn't exist at the PR head (e.g., deleted in this PR) or the path may be wrong – check get_pr_files_summary for valid paths;
 too_large – the file is over the size this tool serves (${MAX_FILE_CONTENTS_BYTES} bytes) or over GitHub's 1 MB blob limit – read the change itself with get_diff, part by part;
+read_limit – the review's overall file-reading budget is spent; you may not open another file – judge from what you have already read, and say so if that is not enough;
 unavailable – couldn't read the file; see reason (e.g., the path is a directory – use list_directory).`,
       inputSchema: z.object({
         path: z.string(),
       }),
       execute: (input) =>
         runTool(log, REVIEW_TOOL_NAMES.getFileContents, input, async () => {
+          if (
+            !filesPaid.has(input.path) &&
+            fileBytesSpent >= FILE_READ_BUDGET_BYTES
+          ) {
+            return { status: "read_limit" };
+          }
+
           try {
             const { content, size } = await gh.getFileContents({
               path: input.path,
@@ -259,6 +280,11 @@ unavailable – couldn't read the file; see reason (e.g., the path is a director
 
             if (content === null) {
               return { status: "too_large" };
+            }
+
+            if (!filesPaid.has(input.path)) {
+              fileBytesSpent += content.length;
+              filesPaid.add(input.path);
             }
 
             return { content, size };

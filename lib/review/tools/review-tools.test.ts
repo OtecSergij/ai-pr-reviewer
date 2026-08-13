@@ -11,6 +11,8 @@ import type { Issue } from "@/lib/review/issue";
 import type { ReviewUIMessage } from "@/lib/review/stream";
 import type { ModelIssue } from "@/lib/review/model-issue.schema";
 import {
+  FILE_READ_BUDGET_BYTES,
+  MAX_FILE_CONTENTS_BYTES,
   MAX_PARTS_PER_FILE,
   MAX_PART_REPEATS,
   PATCH_PART_CHARS,
@@ -450,5 +452,74 @@ describe("emit_issue against the changed-file list", () => {
       ok: true,
     });
     expect(issues.size).toBe(1);
+  });
+});
+
+describe("get_file_contents read budget", () => {
+  const READS_TO_EXHAUST = Math.ceil(
+    FILE_READ_BUDGET_BYTES / MAX_FILE_CONTENTS_BYTES,
+  );
+
+  function servingFullFiles() {
+    const content = "x".repeat(MAX_FILE_CONTENTS_BYTES);
+
+    return fakeGithub([summary("index.js")], new Map(), {
+      getFileContents: async ({ path, ref }): Promise<FileContents> => ({
+        path,
+        ref,
+        content,
+        size: content.length,
+        sha: "sha",
+      }),
+    });
+  }
+
+  const readFile = (tools: ReviewTools, path: string) =>
+    callTool(tools.get_file_contents, { path });
+
+  it("serves files until the run's byte budget is spent", async () => {
+    const { tools } = toolsFor(servingFullFiles());
+
+    for (let i = 0; i < READS_TO_EXHAUST; i++) {
+      expect(await readFile(tools, `src/f${i}.ts`)).toMatchObject({
+        size: MAX_FILE_CONTENTS_BYTES,
+      });
+    }
+
+    expect(await readFile(tools, "src/last.ts")).toEqual({
+      status: "read_limit",
+    });
+  });
+
+  it("still hands back a file the run already paid for", async () => {
+    const { tools } = toolsFor(servingFullFiles());
+
+    for (let i = 0; i < READS_TO_EXHAUST; i++) {
+      await readFile(tools, `src/f${i}.ts`);
+    }
+
+    expect(await readFile(tools, "src/f0.ts")).toMatchObject({
+      size: MAX_FILE_CONTENTS_BYTES,
+    });
+  });
+
+  it("charges an oversized file nothing, because it serves none of it", async () => {
+    const { tools } = toolsFor(
+      fakeGithub([summary("index.js")], new Map(), {
+        getFileContents: async ({ path, ref }): Promise<FileContents> => ({
+          path,
+          ref,
+          content: null,
+          size: MAX_FILE_CONTENTS_BYTES * 10,
+          sha: "sha",
+        }),
+      }),
+    );
+
+    for (let i = 0; i < READS_TO_EXHAUST + 2; i++) {
+      expect(await readFile(tools, `src/f${i}.ts`)).toEqual({
+        status: "too_large",
+      });
+    }
   });
 });
