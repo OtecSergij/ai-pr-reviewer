@@ -22,7 +22,8 @@ import type {
   MockTextBlock,
   MockToolStep,
 } from "@/lib/review/mock/scenario";
-import { createToolStepResult } from "@/lib/review/mock/step-result";
+import { createToolStepRecorder } from "@/lib/review/mock/step-result";
+import type { MockToolStepResult } from "@/lib/review/mock/step-result";
 import { logger } from "@/lib/log";
 
 const TEXT_DELTA_PAUSE_MS = 150;
@@ -54,6 +55,7 @@ async function* reviewScenario(
 ): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const scopeId = createMockIdScope();
+  const recordStep = createToolStepRecorder(options.model, scopeId);
 
   const injected = injectedStartError();
   if (injected) throw injected;
@@ -65,7 +67,7 @@ async function* reviewScenario(
         "MOCK_SCENARIO ignored: MOCK_ERROR=tool-outcomes streams its own fixture",
       );
     }
-    yield* toolOutcomesDemo(options, scopeId);
+    yield* toolOutcomesDemo(options, scopeId, recordStep);
     return;
   }
 
@@ -93,7 +95,14 @@ async function* reviewScenario(
         );
         break;
       case "tool":
-        yield* toolStep(options, step, toolStepNumber, scopeId, signal);
+        yield* toolStep(
+          options,
+          step,
+          toolStepNumber,
+          scopeId,
+          recordStep,
+          signal,
+        );
         toolStepNumber++;
         break;
     }
@@ -133,6 +142,7 @@ function assertScenarioIssues(scenario: MockScenario): void {
 async function* toolOutcomesDemo(
   options: StreamTextOptions,
   scopeId: MockIdScope,
+  recordStep: MockToolStepResult,
 ): AsyncGenerator<ReviewChunk> {
   const signal = options.abortSignal;
   const failedCallId = scopeId("demo-fail");
@@ -161,6 +171,7 @@ async function* toolOutcomesDemo(
     },
     FIRST_TOOL_STEP,
     scopeId,
+    recordStep,
     signal,
   );
   if (signal?.aborted) return;
@@ -254,6 +265,7 @@ async function* toolStep(
   step: MockToolStep,
   stepNumber: number,
   scopeId: MockIdScope,
+  recordStep: MockToolStepResult,
   signal?: AbortSignal,
 ): AsyncGenerator<ReviewChunk> {
   const { toolName, input } = step;
@@ -277,15 +289,7 @@ async function* toolStep(
   yield { type: "tool-output-available", toolCallId, output };
 
   await options.onStepFinish?.(
-    createToolStepResult({
-      model: options.model,
-      stepNumber,
-      toolName,
-      toolCallId,
-      input,
-      output,
-      scopeId,
-    }),
+    recordStep({ stepNumber, toolName, toolCallId, input, output }),
   );
 }
 

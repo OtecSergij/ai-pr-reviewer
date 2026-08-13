@@ -29,6 +29,7 @@ import {
   errorToMessage,
   errorToResponse,
   shownVerdict,
+  verdictMessage,
   OUTPUT_TRUNCATED_VERDICT,
   OVER_BUDGET_VERDICT,
   STEPS_EXHAUSTED_VERDICT,
@@ -162,6 +163,10 @@ export async function runReview({
       );
     }
   } catch (e) {
+    if (signal.aborted) {
+      log.info("review abandoned before stream");
+      return new Response(null, { status: 499 });
+    }
     const res = errorToResponse(e);
     if (res) {
       log.warn({ err: e }, "review rejected before stream");
@@ -231,7 +236,7 @@ export async function runReview({
           transient: true,
           data: { kind: errorKindForReason(shown.reason) },
         });
-        writer.write({ type: "error", errorText: shown.message });
+        writer.write({ type: "error", errorText: verdictMessage(shown) });
       };
 
       for (let i = 0; i < candidates.length; i++) {
@@ -304,7 +309,7 @@ export async function runReview({
         let finishReason: FinishReason | null = null;
         let steps = 0;
         let lastStepHadToolCalls = false;
-        const stepMessages: ModelMessage[] = [];
+        let stepMessages: ModelMessage[] = [];
 
         log.info(
           {
@@ -345,7 +350,7 @@ export async function runReview({
             lastStepHadToolCalls = step.toolCalls.some(
               (call) => call.providerExecuted !== true,
             );
-            stepMessages.push(...step.response.messages);
+            stepMessages = step.response.messages;
             log.info(
               {
                 provider: candidates[i].provider,

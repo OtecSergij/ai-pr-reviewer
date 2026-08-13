@@ -326,6 +326,25 @@ describe("a chain where every model stops on length", () => {
     }
   });
 
+  it("hands the successor each inherited tool call exactly once", async () => {
+    const { runReview } = await loadRunReview({ scenario: "finish-length" });
+    await review(runReview);
+
+    for (const index of [1, 2]) {
+      const callIds = messagesOf(index)
+        .filter((message) => message.role === "assistant")
+        .flatMap((message) =>
+          typeof message.content === "string" ? [] : message.content,
+        )
+        .flatMap((part) =>
+          part.type === "tool-call" ? [part.toolCallId] : [],
+        );
+
+      expect(callIds).not.toHaveLength(0);
+      expect(new Set(callIds).size).toBe(callIds.length);
+    }
+  });
+
   it("nudges each successor that it inherited an unfinished draft", async () => {
     const { runReview } = await loadRunReview({ scenario: "finish-length" });
     await review(runReview);
@@ -399,6 +418,27 @@ describe("a review the client walks away from", () => {
     ]);
     expect(saveReviewMock).not.toHaveBeenCalled();
     expect(notSavedReasons()).toEqual(["aborted"]);
+  });
+
+  it("answers 499 when the caller leaves while GitHub is still loading", async () => {
+    const { runReview, fixture } = await loadRunReview({ offline: false });
+    const controller = new AbortController();
+
+    githubAccessMock.mockImplementation((_token: string | null, pr: PRRef) => ({
+      ...fixture(pr),
+      getPRMetadata: async () => {
+        controller.abort();
+        const aborted = new Error("The operation was aborted");
+        aborted.name = "AbortError";
+        throw aborted;
+      },
+    }));
+
+    const response = await call(runReview, { signal: controller.signal });
+
+    expect(response.status).toBe(499);
+    expect(transcripts).toHaveLength(0);
+    expect(logRecords.filter((entry) => entry.level === "error")).toEqual([]);
   });
 
   it("answers 499 without opening a stream when the signal is already dead", async () => {
