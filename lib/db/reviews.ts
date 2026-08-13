@@ -4,9 +4,12 @@ import type { Logger } from "pino";
 import { db } from "@/lib/db/client";
 import { reviews, type ReviewRow } from "@/lib/db/schema";
 import type { Issue } from "@/lib/review/issue";
+import { withTimeout } from "@/lib/with-timeout";
 import { reviewSlug, isReviewSlug, type ReviewIdentity } from "./slug";
 
 export { isReviewSlug };
+
+const SAVE_TIMEOUT_MS = 3_000;
 
 export async function saveReview(
   input: ReviewIdentity & {
@@ -18,29 +21,33 @@ export async function saveReview(
 ): Promise<string> {
   const startedAt = Date.now();
   const slug = reviewSlug(input);
-  await db
-    .insert(reviews)
-    .values({
-      slug,
-      owner: input.owner,
-      repo: input.repo,
-      prNumber: input.prNumber,
-      headSha: input.headSha,
-      prTitle: input.prTitle,
-      issues: input.issues,
-      modelId: input.modelId,
-    })
-    .onConflictDoUpdate({
-      target: reviews.slug,
-      set: {
+  await withTimeout(
+    db
+      .insert(reviews)
+      .values({
+        slug,
         owner: input.owner,
         repo: input.repo,
+        prNumber: input.prNumber,
+        headSha: input.headSha,
         prTitle: input.prTitle,
         issues: input.issues,
         modelId: input.modelId,
-        createdAt: sql`now()`,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: reviews.slug,
+        set: {
+          owner: input.owner,
+          repo: input.repo,
+          prTitle: input.prTitle,
+          issues: input.issues,
+          modelId: input.modelId,
+          createdAt: sql`now()`,
+        },
+      }),
+    SAVE_TIMEOUT_MS,
+    "review save timed out",
+  );
 
   log.info(
     {
