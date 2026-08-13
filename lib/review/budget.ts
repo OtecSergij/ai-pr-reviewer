@@ -7,7 +7,12 @@ const BUDGET_HEADROOM = 0.8;
 
 export type BudgetTool = { description?: string; inputSchema: unknown };
 
+const overheadByToolSet = new WeakMap<Record<string, BudgetTool>, number>();
+
 function overheadChars(tools: Record<string, BudgetTool>): number {
+  const memoized = overheadByToolSet.get(tools);
+  if (memoized !== undefined) return memoized;
+
   const schemas = JSON.stringify(
     Object.entries(tools).map(([name, tool]) => ({
       name,
@@ -17,7 +22,9 @@ function overheadChars(tools: Record<string, BudgetTool>): number {
     })),
   );
 
-  return SYSTEM.length + schemas.length;
+  const chars = SYSTEM.length + schemas.length;
+  overheadByToolSet.set(tools, chars);
+  return chars;
 }
 
 export function estimateInputTokens(

@@ -36,7 +36,7 @@ describe("the fixed per-request overhead", () => {
     expect(overheadTokens).toBeLessThan(3_500);
   });
 
-  it("is recomputed per call, so a changed tool set changes the estimate", () => {
+  it("tracks the tool set, so a wordier schema raises the estimate", () => {
     const wordier = {
       ...tools,
       get_diff: { ...tools.get_diff, description: "d".repeat(7_000) },
