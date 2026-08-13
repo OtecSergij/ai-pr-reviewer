@@ -12,7 +12,7 @@ type ErrorCardProps = {
 
 const HEADLINES: Record<ErrorKind, string> = {
   load: "Couldn’t load this pull request",
-  github: "GitHub rejected the request",
+  github: "GitHub couldn’t serve this pull request",
   "rate-limit": "Rate limit reached",
   "provider-quota": "The review models are out of quota",
   private: "This pull request is private",
@@ -47,8 +47,9 @@ const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
   ),
   github: (
     <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
-      The message above is GitHub’s own — the review never started. If it reads
-      like a hiccup on their side, try again in a moment.
+      The review never started — GitHub timed out, rate-limited us, or answered
+      with an error. Nothing about the pull request itself is wrong; a retry in
+      a moment usually goes through.
     </p>
   ),
   "provider-quota": (

@@ -6,6 +6,7 @@ import {
   errorToMessage,
   errorToResponse,
   shownVerdict,
+  verdictMessage,
   OUTPUT_TRUNCATED_VERDICT,
   OVER_BUDGET_VERDICT,
   STEPS_EXHAUSTED_VERDICT,
@@ -492,7 +493,18 @@ describe("errorToResponse", () => {
       errorToResponse(new SecondaryRateLimitError(60))?.headers.get(
         "x-review-error",
       ),
-    ).toBe("rate-limit");
+    ).toBe("github");
+  });
+
+  it("keeps GitHub's own throttling off the card that means our limiter", () => {
+    for (const error of [
+      new RateLimitError(new Date("2026-08-12T09:00:00.000Z")),
+      new SecondaryRateLimitError(60),
+    ]) {
+      expect(errorToResponse(error)?.headers.get("x-review-error")).not.toBe(
+        "rate-limit",
+      );
+    }
   });
 
   it("keeps a raw GitHub body out of the card", async () => {
@@ -577,12 +589,12 @@ const GITHUB_FAILURES: Record<
   },
   RATE_LIMIT: {
     status: 429,
-    kind: "rate-limit",
+    kind: "github",
     error: () => new RateLimitError(new Date("2026-08-12T09:00:00.000Z")),
   },
   SECONDARY_RATE_LIMIT: {
     status: 429,
-    kind: "rate-limit",
+    kind: "github",
     error: () => new SecondaryRateLimitError(60),
   },
   TIMEOUT: {
@@ -650,5 +662,33 @@ describe("errorToMessage outside GitHub's failures", () => {
     expect(errorToMessage(new GitHubApiError(502, "Bad\n\n  Gateway"))).toBe(
       "GitHub API error (502): Bad Gateway",
     );
+  });
+});
+
+describe("verdictMessage", () => {
+  it("leaves a verdict that carries no retry hint untouched", () => {
+    expect(
+      verdictMessage({ hop: true, reason: "server", message: "Busy." }),
+    ).toBe("Busy.");
+  });
+
+  it("passes the provider's own wait on to the reader", () => {
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "rate-limit",
+        message: "Busy.",
+        retryAfterSec: 45,
+      }),
+    ).toContain("45s");
+
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "rate-limit",
+        message: "Busy.",
+        retryAfterSec: 120,
+      }),
+    ).toContain("2 min");
   });
 });

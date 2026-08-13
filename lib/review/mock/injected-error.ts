@@ -15,11 +15,13 @@ function apiError({
   statusCode,
   isRetryable = false,
   responseBody,
+  responseHeaders,
 }: {
   message: string;
   statusCode: number;
   isRetryable?: boolean;
   responseBody?: string;
+  responseHeaders?: Record<string, string>;
 }): APICallError {
   return new APICallError({
     message,
@@ -28,6 +30,7 @@ function apiError({
     statusCode,
     isRetryable,
     responseBody,
+    responseHeaders,
   });
 }
 
@@ -64,6 +67,7 @@ export function injectedStartError(): unknown {
         message: "Too Many Requests",
         statusCode: 429,
         isRetryable: true,
+        responseHeaders: { "retry-after": "30" },
       });
     case "context-overflow":
       return apiError({

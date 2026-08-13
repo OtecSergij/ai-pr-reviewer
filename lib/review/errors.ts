@@ -265,6 +265,16 @@ export function errorKindForReason(reason: FailureReason): ErrorKind {
   return KIND_BY_REASON[reason];
 }
 
+function retryHint(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.ceil(seconds / 60)} min`;
+}
+
+export function verdictMessage(verdict: FailureVerdict): string {
+  if (verdict.retryAfterSec === undefined) return verdict.message;
+  return `${verdict.message} The provider asked for about ${retryHint(verdict.retryAfterSec)} before the next attempt.`;
+}
+
 function forUser(message: string): string {
   const collapsed = message.replace(/\s+/g, " ").trim();
   if (collapsed.length <= MAX_USER_MESSAGE_CHARS) return collapsed;
@@ -292,8 +302,8 @@ const KIND_BY_GITHUB_CODE: Record<GitHubErrorCode, ErrorKind> = {
   UNAUTHORIZED: "load",
   FORBIDDEN: "load",
   NOT_FOUND: "load",
-  RATE_LIMIT: "rate-limit",
-  SECONDARY_RATE_LIMIT: "rate-limit",
+  RATE_LIMIT: "github",
+  SECONDARY_RATE_LIMIT: "github",
   TIMEOUT: "github",
   GITHUB_API_ERROR: "github",
 };
