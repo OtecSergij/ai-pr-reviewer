@@ -12,6 +12,10 @@ export const PATCH_READ_BUDGET_CHARS = 60_000;
 
 export const MAX_PART_REPEATS = 3;
 
+export const MAX_ISSUE_REFUSALS = 3;
+
+export const ISSUE_REFUSAL_BUDGET = MAX_CHANGED_FILES * MAX_ISSUE_REFUSALS;
+
 export const BODY_CAP = 10_000;
 
 export const MAX_FILE_CONTENTS_BYTES = 18_000;

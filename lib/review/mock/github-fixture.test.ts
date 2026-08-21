@@ -203,7 +203,7 @@ describe("fixture issues enrich into rendered code", () => {
     for (const issue of [...mockModelIssues, ...richModelIssues]) {
       expect(changed).toContain(issue.file);
 
-      const enriched = await enrichIssue(gh, repo, issue, log);
+      const { issue: enriched } = await enrichIssue(gh, repo, issue, log);
       const targets = enriched.codeLines.filter((line) => line.target);
       const lines = await contentLines(issue.file);
 
