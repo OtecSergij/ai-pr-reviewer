@@ -62,6 +62,7 @@ const EnvSchema = z.object({
         "interleaved-text",
         "reasoning",
         "finish-length",
+        "finish-length-read-all",
       ])
       .optional(),
   ),

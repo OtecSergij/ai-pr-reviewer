@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ModelMessage } from "ai";
+import type { ModelMessage, streamText } from "ai";
 
-import { HANDOFF_NUDGE } from "@/lib/review/system-prompt";
+import {
+  READING_TOOL_NAMES,
+  REVIEW_TOOL_NAMES,
+} from "@/lib/review/tools/tool-names";
 import type { GithubAccess } from "@/lib/github/octokit";
 import type { PRRef } from "@/lib/github/parse-url";
 
@@ -15,13 +18,24 @@ type StreamChunk = { type: string } & Record<string, unknown>;
 
 type FixtureFactory = (pr: PRRef) => GithubAccess;
 
-const { transcripts, logRecords, saveReviewMock, githubAccessMock } =
-  vi.hoisted(() => ({
-    transcripts: [] as unknown[][],
-    logRecords: [] as LogRecord[],
-    saveReviewMock: vi.fn(),
-    githubAccessMock: vi.fn(),
-  }));
+type StreamOptions = Parameters<typeof streamText>[0];
+
+type StreamTextMock =
+  typeof import("@/lib/review/mock/stream-text-mock").streamTextMock;
+
+const {
+  transcripts,
+  streamOptions,
+  logRecords,
+  saveReviewMock,
+  githubAccessMock,
+} = vi.hoisted(() => ({
+  transcripts: [] as unknown[][],
+  streamOptions: [] as StreamOptions[],
+  logRecords: [] as LogRecord[],
+  saveReviewMock: vi.fn(),
+  githubAccessMock: vi.fn(),
+}));
 
 vi.mock("@/lib/redis", () => ({
   redis: { isReady: false, isOpen: true },
@@ -79,10 +93,33 @@ vi.mock("@/lib/github/octokit", async (importOriginal) => {
   return { ...actual, createGithubAccess: githubAccessMock };
 });
 
+vi.mock("@/lib/review/mock/stream-text-mock", (importOriginal) => {
+  const load = () => importOriginal<{ streamTextMock: StreamTextMock }>();
+
+  const recorded = (options: StreamOptions) => {
+    streamOptions.push(options);
+
+    return {
+      toUIMessageStream: async function* () {
+        const actual = await load();
+        const stream = actual.streamTextMock as unknown as (
+          o: StreamOptions,
+        ) => { toUIMessageStream: () => AsyncIterable<unknown> };
+
+        yield* stream(options).toUIMessageStream();
+      },
+    };
+  };
+
+  return { streamTextMock: recorded as unknown as StreamTextMock };
+});
+
 const PR_URL = "https://github.com/vercel/ms/pull/17";
 const REQUEST_ID = "6b7d1d94-5a2a-4f0a-9c1e-2e0d5a6c7b81";
 const CLIENT_IP = "203.0.113.7";
 const ORPHANED_TOOL_CALL_ID = "mock-orphaned-call";
+const NUDGE_OPENING = "Your review above was interrupted mid-way";
+const GENERATED_FILE = "dist/ms.min.js";
 const TICK_MS = 250;
 const TICK_LIMIT = 4_000;
 
@@ -130,6 +167,40 @@ const privateAccess =
         ...(await base.getPRMetadata()),
         isPrivate: true,
       }),
+    };
+  };
+
+const withGeneratedFile =
+  (fixture: FixtureFactory) =>
+  (_token: string | null, pr: PRRef): GithubAccess => {
+    const base = fixture(pr);
+    return {
+      ...base,
+      getPRFiles: async () => [
+        ...(await base.getPRFiles()),
+        {
+          filename: GENERATED_FILE,
+          status: "modified",
+          additions: 1,
+          deletions: 1,
+          changes: 2,
+          previousFilename: null,
+        },
+      ],
+    };
+  };
+
+const allGenerated =
+  (fixture: FixtureFactory) =>
+  (_token: string | null, pr: PRRef): GithubAccess => {
+    const base = fixture(pr);
+    return {
+      ...base,
+      getPRFiles: async () =>
+        (await base.getPRFiles()).map((f) => ({
+          ...f,
+          filename: `dist/${f.filename}`,
+        })),
     };
   };
 
@@ -213,6 +284,48 @@ const dataOf = (
 const messagesOf = (index: number): ModelMessage[] =>
   transcripts[index] as ModelMessage[];
 
+const toolCallsIn = (messages: ModelMessage[], toolName: string): string[] =>
+  messages
+    .filter((message) => message.role === "assistant")
+    .flatMap((message) =>
+      typeof message.content === "string" ? [] : message.content,
+    )
+    .flatMap((part) =>
+      part.type === "tool-call" && part.toolName === toolName
+        ? [part.toolCallId]
+        : [],
+    );
+
+const nudgesIn = (messages: ModelMessage[]): string[] =>
+  messages.flatMap((message) =>
+    message.role === "user" &&
+    typeof message.content === "string" &&
+    message.content.startsWith(NUDGE_OPENING)
+      ? [message.content]
+      : [],
+  );
+
+const nudgeOf = (index: number): string => {
+  const found = nudgesIn(messagesOf(index));
+  if (found.length !== 1) {
+    throw new Error(`transcript ${index} carries ${found.length} nudges`);
+  }
+  return found[0];
+};
+
+const stepZeroSettings = async (index: number): Promise<unknown> => {
+  const options = streamOptions[index];
+  if (!options.prepareStep) return undefined;
+
+  return options.prepareStep({
+    stepNumber: 0,
+    steps: [],
+    model: options.model,
+    messages: [],
+    experimental_context: undefined,
+  });
+};
+
 const notSavedReasons = (): unknown[] =>
   logRecords
     .filter((entry) => entry.msg === "review not saved")
@@ -220,6 +333,7 @@ const notSavedReasons = (): unknown[] =>
 
 beforeEach(() => {
   transcripts.length = 0;
+  streamOptions.length = 0;
   logRecords.length = 0;
   saveReviewMock.mockReset();
   saveReviewMock.mockResolvedValue("vercel-ms-17-7c2d4f1b");
@@ -345,18 +459,145 @@ describe("a chain where every model stops on length", () => {
     }
   });
 
-  it("nudges each successor that it inherited an unfinished draft", async () => {
+  it("closes every successor's transcript with one nudge and no more", async () => {
     const { runReview } = await loadRunReview({ scenario: "finish-length" });
     await review(runReview);
 
     for (let index = 1; index < transcripts.length; index++) {
       expect(messagesOf(index).at(-1)).toEqual({
         role: "user",
-        content: HANDOFF_NUDGE,
+        content: nudgeOf(index),
       });
     }
 
     expect(messagesOf(0)).toHaveLength(1);
+  });
+
+  it("tells the successor which issues it emitted and which diffs it owes", async () => {
+    const { runReview } = await loadRunReview({ scenario: "finish-length" });
+    await review(runReview);
+
+    const nudge = nudgeOf(1);
+
+    expect(nudge).toContain(
+      "- Issues already emitted: 1 — warning index.js:74-77.",
+    );
+    expect(nudge).toContain("- File diffs already requested: index.js.");
+    expect(nudge).toContain(
+      "- File diffs not yet requested: test/test.js, README.md.",
+    );
+    expect(nudge).toContain("Your next action must be a tool call.");
+  });
+
+  it("replaces the stale nudge on the second hop instead of stacking one", async () => {
+    const { runReview } = await loadRunReview({ scenario: "finish-length" });
+    await review(runReview);
+
+    const messages = messagesOf(2);
+    const diffCalls = toolCallsIn(messages, REVIEW_TOOL_NAMES.getDiff);
+
+    expect(nudgesIn(messages)).toHaveLength(1);
+    expect(messages.at(-1)).toEqual({ role: "user", content: nudgeOf(2) });
+    expect(diffCalls).toHaveLength(2);
+    expect(new Set(diffCalls).size).toBe(2);
+    expect(nudgeOf(2)).toContain(
+      "- Issues already emitted: 1 — warning index.js:74-77.",
+    );
+    expect(nudgeOf(2)).toContain("- File diffs already requested: index.js.");
+    expect(nudgeOf(2)).toContain(
+      "- File diffs not yet requested: test/test.js, README.md.",
+    );
+  });
+
+  it("forces a reading tool on the successor's first step", async () => {
+    const { runReview } = await loadRunReview({ scenario: "finish-length" });
+    await review(runReview);
+
+    expect(streamOptions).toHaveLength(3);
+    await expect(stepZeroSettings(0)).resolves.toBeUndefined();
+
+    for (const index of [1, 2]) {
+      await expect(stepZeroSettings(index)).resolves.toEqual({
+        toolChoice: "required",
+        activeTools: READING_TOOL_NAMES,
+      });
+    }
+  });
+
+  it("never asks the successor to read a generated file", async () => {
+    const { runReview, fixture } = await loadRunReview({
+      scenario: "finish-length",
+      offline: false,
+    });
+    githubAccessMock.mockImplementation(withGeneratedFile(fixture));
+
+    const chunks = await review(runReview);
+    const nudge = nudgeOf(1);
+
+    expect(JSON.stringify(dataOf(chunks, "data-files"))).toContain(
+      GENERATED_FILE,
+    );
+    expect(nudge).toContain(
+      "- File diffs not yet requested: test/test.js, README.md.",
+    );
+    expect(nudge).not.toContain(GENERATED_FILE);
+  });
+});
+
+describe("a chain interrupted once every diff had been read", () => {
+  it("tells the successor to finish rather than to keep reading", async () => {
+    const { runReview } = await loadRunReview({
+      scenario: "finish-length-read-all",
+    });
+    await review(runReview);
+
+    const nudge = nudgeOf(1);
+
+    expect(nudge).toContain(
+      "- File diffs already requested: index.js, test/test.js, README.md.",
+    );
+    expect(nudge).toContain(
+      "- File diffs not yet requested: none — every reviewable file in this PR has been requested.",
+    );
+    expect(nudge).toContain(
+      "Finish the review now: emit any issue you have found but not yet emitted, then close.",
+    );
+    expect(nudge).toContain("the closing line is: Review complete.");
+  });
+
+  it("leaves the successor's first step free to emit what it already found", async () => {
+    const { runReview } = await loadRunReview({
+      scenario: "finish-length-read-all",
+    });
+    await review(runReview);
+
+    expect(streamOptions).toHaveLength(3);
+    await expect(stepZeroSettings(1)).resolves.toBeUndefined();
+  });
+});
+
+describe("a pull request in which every file is generated", () => {
+  it("names the generated diffs rather than claiming they were read", async () => {
+    const { runReview, fixture } = await loadRunReview({
+      error: "first-only",
+      offline: false,
+    });
+    githubAccessMock.mockImplementation(allGenerated(fixture));
+
+    await review(runReview);
+
+    const nudge = nudgeOf(1);
+
+    expect(streamOptions).toHaveLength(2);
+    expect(nudge).toContain("- File diffs already requested: none.");
+    expect(nudge).toContain(
+      "- File diffs not yet requested: dist/index.js, dist/test/test.js, dist/README.md.",
+    );
+    expect(nudge).toContain("Your next action must be a tool call.");
+    await expect(stepZeroSettings(1)).resolves.toEqual({
+      toolChoice: "required",
+      activeTools: READING_TOOL_NAMES,
+    });
   });
 });
 
@@ -381,7 +622,7 @@ describe("a chain whose first model dies mid-stream", () => {
     const messages = messagesOf(1);
 
     expect(JSON.stringify(messages)).not.toContain(ORPHANED_TOOL_CALL_ID);
-    expect(messages.at(-1)).toEqual({ role: "user", content: HANDOFF_NUDGE });
+    expect(messages.at(-1)).toEqual({ role: "user", content: nudgeOf(1) });
     expect(messages.length).toBeGreaterThan(2);
   });
 
