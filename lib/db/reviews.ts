@@ -9,7 +9,8 @@ import { reviewSlug, isReviewSlug, type ReviewIdentity } from "./slug";
 
 export { isReviewSlug };
 
-const SAVE_TIMEOUT_MS = 3_000;
+const SAVE_TIMEOUT_MS = 3_500;
+const GET_TIMEOUT_MS = 3_500;
 
 export async function saveReview(
   input: ReviewIdentity & {
@@ -62,10 +63,10 @@ export async function saveReview(
 }
 
 export async function getReview(slug: string): Promise<ReviewRow | null> {
-  const [row] = await db
-    .select()
-    .from(reviews)
-    .where(eq(reviews.slug, slug))
-    .limit(1);
+  const [row] = await withTimeout(
+    db.select().from(reviews).where(eq(reviews.slug, slug)).limit(1),
+    GET_TIMEOUT_MS,
+    "review lookup timed out",
+  );
   return row ?? null;
 }

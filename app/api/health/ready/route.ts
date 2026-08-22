@@ -4,7 +4,7 @@ import { redis, ensureRedisConnection } from "@/lib/redis";
 import { logger } from "@/lib/log";
 import { withTimeout } from "@/lib/with-timeout";
 
-const CHECK_TIMEOUT_MS = 2_000;
+const CHECK_TIMEOUT_MS = 3_500;
 const CHECK_NAMES = ["postgres", "redis"] as const;
 
 export async function GET(): Promise<Response> {

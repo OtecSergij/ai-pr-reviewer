@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 
 export const db = drizzle(
   postgres(env.DATABASE_URL, {
-    connect_timeout: 5,
-    connection: { statement_timeout: 2000 },
+    connect_timeout: 1,
+    connection: { statement_timeout: 1000 },
   }),
 );
