@@ -70,6 +70,23 @@ describe("splitPatch", () => {
     expect(parts.join("\n")).toBe(patch);
   });
 
+  it("never packs a small neighbour onto the headless tail of a split hunk", () => {
+    const body = Array.from({ length: 600 }, (_, i) => `+line ${i}`).join("\n");
+    const huge = `@@ -1,600 +1,600 @@\n${body}`;
+    const patch = [huge, hunk(900, 46)].join("\n");
+
+    expect(huge.length).toBeGreaterThan(PATCH_PART_CHARS);
+
+    const parts = splitPatch(patch);
+
+    for (const part of parts) {
+      const [, ...rest] = part.split("\n");
+      expect(rest.some((line) => line.startsWith("@@"))).toBe(false);
+    }
+    expect(parts.at(-1)).toBe(hunk(900, 46));
+    expect(parts.join("\n")).toBe(patch);
+  });
+
   it("keeps a single line longer than the cap intact, because it has no boundary inside", () => {
     const huge = hunk(1, PATCH_PART_CHARS + 500);
 

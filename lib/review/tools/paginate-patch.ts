@@ -55,10 +55,21 @@ const splitHunk = (hunk: string, cap: number): string[] => {
 export const splitPatch = (
   patch: string,
   cap: number = PATCH_PART_CHARS,
-): string[] =>
-  pack(
-    splitHunks(patch).flatMap((hunk) =>
-      hunk.length <= cap ? [hunk] : splitHunk(hunk, cap),
-    ),
-    cap,
-  );
+): string[] => {
+  const parts: string[] = [];
+  let whole: string[] = [];
+
+  for (const hunk of splitHunks(patch)) {
+    if (hunk.length <= cap) {
+      whole.push(hunk);
+      continue;
+    }
+
+    parts.push(...pack(whole, cap), ...splitHunk(hunk, cap));
+    whole = [];
+  }
+
+  parts.push(...pack(whole, cap));
+
+  return parts;
+};
