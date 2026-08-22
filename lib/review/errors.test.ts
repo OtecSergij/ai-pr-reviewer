@@ -28,6 +28,8 @@ import type { ErrorKind } from "@/lib/review/transcript";
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
   "The API key you entered doesn't have access to this model.";
+const NO_CREDIT_MESSAGE =
+  "The Anthropic account behind the API key you entered is out of credits. Add credits in the Anthropic console.";
 const REVIEW_UNAVAILABLE_MESSAGE =
   "The review service is temporarily unavailable. Please try again later.";
 const TRANSIENT_MESSAGE =
@@ -203,6 +205,77 @@ describe("classifyFailure auth statuses", () => {
 
     expect(errorKindForReason(theirs.reason)).toBe("api-key");
     expect(errorKindForReason(ours.reason)).toBe("review");
+  });
+});
+
+describe("classifyFailure billing refusals", () => {
+  const CREDIT_BODY =
+    '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}';
+
+  it("distinguishes user-key from service-key on 402", () => {
+    expect(
+      classifyFailure(apiError({ statusCode: 402 }), { userKey: true }),
+    ).toEqual({
+      hop: false,
+      reason: "key-rejected",
+      message: NO_CREDIT_MESSAGE,
+    });
+    expect(
+      classifyFailure(apiError({ statusCode: 402 }), { userKey: false }),
+    ).toEqual({
+      hop: true,
+      reason: "auth",
+      message: REVIEW_UNAVAILABLE_MESSAGE,
+    });
+  });
+
+  it("sends an empty account to the card that hides Try again", () => {
+    const verdict = classifyFailure(apiError({ statusCode: 402 }), {
+      userKey: true,
+    });
+
+    expect(errorKindForReason(verdict.reason)).toBe("api-key");
+  });
+
+  it("reads the legacy 400 credit-balance body as a refused key", () => {
+    expect(
+      classifyFailure(
+        apiError({ statusCode: 400, responseBody: CREDIT_BODY }),
+        { userKey: true },
+      ),
+    ).toEqual({
+      hop: false,
+      reason: "key-rejected",
+      message: NO_CREDIT_MESSAGE,
+    });
+  });
+
+  it("reads the same wording out of the message, whatever its case", () => {
+    expect(
+      classifyFailure(
+        apiError({ statusCode: 400, message: "Your Credit Balance Is Too Low" }),
+        { userKey: true },
+      ),
+    ).toMatchObject({ reason: "key-rejected", message: NO_CREDIT_MESSAGE });
+  });
+
+  it("leaves that same body on the server chain classified as before", () => {
+    expect(
+      classifyFailure(apiError({ statusCode: 400, responseBody: CREDIT_BODY })),
+    ).toEqual({ hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE });
+  });
+
+  it("lets a retryable failure keep its Try again despite the credit marker", () => {
+    expect(
+      classifyFailure(
+        apiError({
+          statusCode: 500,
+          isRetryable: true,
+          responseBody: CREDIT_BODY,
+        }),
+        { userKey: true },
+      ),
+    ).toEqual({ hop: true, reason: "server", message: TRANSIENT_MESSAGE });
   });
 });
 

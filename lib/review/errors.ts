@@ -12,6 +12,8 @@ const SERVER_SIDE_MESSAGE =
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
   "The API key you entered doesn't have access to this model.";
+const NO_CREDIT_MESSAGE =
+  "The Anthropic account behind the API key you entered is out of credits. Add credits in the Anthropic console.";
 const REVIEW_UNAVAILABLE_MESSAGE =
   "The review service is temporarily unavailable. Please try again later.";
 const MODEL_UNAVAILABLE_MESSAGE = "The selected model isn't available.";
@@ -63,9 +65,19 @@ const CONTEXT_OVERFLOW_MARKERS = [
   "input is too large",
 ];
 
+const CREDIT_BALANCE_MARKER = "credit balance";
+
+function haystack(error: APICallError): string {
+  return `${error.message} ${error.responseBody ?? ""}`.toLowerCase();
+}
+
 function isContextOverflow(error: APICallError): boolean {
-  const haystack = `${error.message} ${error.responseBody ?? ""}`.toLowerCase();
-  return CONTEXT_OVERFLOW_MARKERS.some((marker) => haystack.includes(marker));
+  const text = haystack(error);
+  return CONTEXT_OVERFLOW_MARKERS.some((marker) => text.includes(marker));
+}
+
+function isCreditExhausted(error: APICallError): boolean {
+  return haystack(error).includes(CREDIT_BALANCE_MARKER);
 }
 
 function isAbort(error: unknown): boolean {
@@ -153,6 +165,10 @@ function classifyApiError(
     return userKey
       ? { hop: false, reason: "key-rejected", message: INVALID_KEY_MESSAGE }
       : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
+  if (status === 402)
+    return userKey
+      ? { hop: false, reason: "key-rejected", message: NO_CREDIT_MESSAGE }
+      : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 403)
     return userKey
       ? { hop: false, reason: "key-rejected", message: NO_ACCESS_MESSAGE }
@@ -192,6 +208,8 @@ function classifyApiError(
       reason: "context-overflow",
       message: TOO_LARGE_MESSAGE,
     };
+  if (userKey && isCreditExhausted(error))
+    return { hop: false, reason: "key-rejected", message: NO_CREDIT_MESSAGE };
 
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }

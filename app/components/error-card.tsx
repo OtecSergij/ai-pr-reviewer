@@ -15,7 +15,7 @@ const HEADLINES: Record<ErrorKind, string> = {
   github: "GitHub couldn’t serve this pull request",
   "rate-limit": "Rate limit reached",
   "provider-quota": "The review models are out of quota",
-  "api-key": "Your API key was rejected",
+  "api-key": "Couldn’t run the review with your key",
   private: "This pull request is private",
   review: "Review failed",
   "too-many-files": "This PR is too large to review",
@@ -62,9 +62,10 @@ const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
   ),
   "api-key": (
     <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
-      Anthropic refused this key, so another run with it ends the same way. Edit
-      URL takes you back to the form — paste a working key there, or clear “Use
-      Claude Sonnet” to run on the free models.
+      Anthropic refused this request, so another run with the same key ends the
+      same way. Edit URL takes you back to the form, where you can paste a
+      different key or fix the account behind this one. Clearing “Use Claude
+      Sonnet” runs the review on the free models instead.
     </p>
   ),
 };

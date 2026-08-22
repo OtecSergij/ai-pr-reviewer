@@ -37,6 +37,7 @@ const EnvSchema = z.object({
         "retry-exhausted",
         "api-400",
         "api-401",
+        "api-402",
         "api-403",
         "api-404",
         "api-413",
