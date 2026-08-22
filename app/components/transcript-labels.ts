@@ -28,6 +28,7 @@ const REASON_LABELS: Record<FailureReason, string> = {
   "steps-exhausted": "hit the step ceiling",
   unavailable: "is unavailable",
   auth: "failed",
+  "key-rejected": "rejected the key",
   aborted: "failed",
   unknown: "failed",
 };
@@ -65,6 +66,8 @@ export function statusLabel(status?: string): string {
       return "no patch";
     case "not_in_pr":
       return "not in PR";
+    case "lines_not_in_diff":
+      return "lines not in diff";
     case "too_large":
       return "too large";
     case "no_such_part":
@@ -72,6 +75,8 @@ export function statusLabel(status?: string): string {
     case "part_limit":
     case "read_limit":
       return "read limit reached";
+    case "retry_limit":
+      return "retry limit reached";
     case "unavailable":
       return "unavailable";
     default:

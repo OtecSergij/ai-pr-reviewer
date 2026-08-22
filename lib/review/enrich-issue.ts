@@ -95,16 +95,22 @@ function sliceFromDiff(patch: string, issue: ModelIssue): CodeLine[] | null {
   }));
 }
 
+function hasAnchorableHunk(patch: string): boolean {
+  return parseUnifiedDiff(patch).some(({ newEnd }) => newEnd >= 1);
+}
+
 type CodeLinesResult = {
   codeLines: CodeLine[];
   patchFound: boolean;
   hunkMatched: boolean;
+  anchorMissing: boolean;
 };
 
 const noCodeLines = (): CodeLinesResult => ({
   codeLines: [],
   patchFound: false,
   hunkMatched: false,
+  anchorMissing: false,
 });
 
 async function buildCodeLines(
@@ -121,6 +127,7 @@ async function buildCodeLines(
       codeLines: slice ?? [],
       patchFound: true,
       hunkMatched: slice !== null,
+      anchorMissing: slice === null && hasAnchorableHunk(patch),
     };
   } catch (e) {
     log.warn({ err: e, file: issue.file }, "buildCodeLines failed");
@@ -128,17 +135,19 @@ async function buildCodeLines(
   }
 }
 
+type EnrichedIssue = {
+  issue: Issue;
+  anchorMissing: boolean;
+};
+
 export async function enrichIssue(
   gh: GithubAccess,
   repo: RepoContext,
   issue: ModelIssue,
   log: Logger,
-): Promise<Issue> {
-  const { codeLines, patchFound, hunkMatched } = await buildCodeLines(
-    gh,
-    issue,
-    log,
-  );
+): Promise<EnrichedIssue> {
+  const { codeLines, patchFound, hunkMatched, anchorMissing } =
+    await buildCodeLines(gh, issue, log);
 
   const id = createHash("sha256")
     .update(
@@ -155,24 +164,28 @@ export async function enrichIssue(
       severity: issue.severity,
       patchFound,
       hunkMatched,
+      anchorMissing,
       codeLines: codeLines.length,
     },
     "issue enriched",
   );
 
   return {
-    id,
-    severity: issue.severity,
-    title: issue.title,
-    body: normalizeModelText(issue.body),
-    suggestion: issue.suggestion
-      ? normalizeSuggestion(issue.suggestion)
-      : undefined,
-    file: issue.file,
-    lineStart: issue.line_start,
-    lineEnd: issue.line_end,
-    blobUrl: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
-    language: issueLanguage(issue.file),
-    codeLines,
+    issue: {
+      id,
+      severity: issue.severity,
+      title: issue.title,
+      body: normalizeModelText(issue.body),
+      suggestion: issue.suggestion
+        ? normalizeSuggestion(issue.suggestion)
+        : undefined,
+      file: issue.file,
+      lineStart: issue.line_start,
+      lineEnd: issue.line_end,
+      blobUrl: `https://github.com/${repo.owner}/${repo.repo}/blob/${repo.headSha}/${issue.file}#L${issue.line_start}-L${issue.line_end}`,
+      language: issueLanguage(issue.file),
+      codeLines,
+    },
+    anchorMissing,
   };
 }

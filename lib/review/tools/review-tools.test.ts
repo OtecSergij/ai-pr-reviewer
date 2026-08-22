@@ -12,7 +12,9 @@ import type { ReviewUIMessage } from "@/lib/review/stream";
 import type { ModelIssue } from "@/lib/review/model-issue.schema";
 import {
   FILE_READ_BUDGET_BYTES,
+  ISSUE_REFUSAL_BUDGET,
   MAX_FILE_CONTENTS_BYTES,
+  MAX_ISSUE_REFUSALS,
   MAX_PARTS_PER_FILE,
   MAX_PART_REPEATS,
   PATCH_PART_CHARS,
@@ -93,7 +95,11 @@ function toolsFor(gh: GithubAccess) {
     write: vi.fn(),
   } as unknown as UIMessageStreamWriter<ReviewUIMessage>;
 
-  return { tools: createReviewTools(gh, issues, repo, writer, log), issues };
+  return {
+    tools: createReviewTools(gh, issues, repo, writer, log),
+    issues,
+    writer,
+  };
 }
 
 function callTool(tool: unknown, input: unknown): Promise<ToolOutput> {
@@ -440,6 +446,50 @@ describe("emit_issue against the changed-file list", () => {
     expect(issues.size).toBe(1);
   });
 
+  it("escalates a path the PR does not change into the retry guard", async () => {
+    const { tools, issues } = toolsFor(
+      fakeGithub(
+        [summary("index.js")],
+        new Map([["index.js", patchOfParts(1)]]),
+      ),
+    );
+
+    for (let i = 0; i < MAX_ISSUE_REFUSALS; i++) {
+      expect(
+        await callTool(tools.emit_issue, issueOn("src/invented.ts")),
+      ).toMatchObject({ status: "not_in_pr" });
+    }
+
+    const closed = await callTool(tools.emit_issue, issueOn("src/invented.ts"));
+
+    expect(closed).toMatchObject({ status: "retry_limit" });
+    expect(String(closed.reason)).toContain("src/invented.ts");
+    expect(issues.size).toBe(0);
+  });
+
+  it("closes emit_issue once the review's refusal budget is spent", async () => {
+    const { tools, issues } = toolsFor(
+      fakeGithub(
+        [summary("index.js")],
+        new Map([["index.js", patchOfParts(1)]]),
+      ),
+    );
+
+    const respelt = (i: number) => `${"./".repeat(i + 1)}index.js`;
+
+    for (let i = 0; i < ISSUE_REFUSAL_BUDGET; i++) {
+      expect(
+        await callTool(tools.emit_issue, issueOn(respelt(i))),
+      ).toMatchObject({ status: "not_in_pr" });
+    }
+
+    const closed = await callTool(tools.emit_issue, issueOn("/index.js"));
+
+    expect(closed).toMatchObject({ status: "retry_limit" });
+    expect(String(closed.reason)).toContain(String(ISSUE_REFUSAL_BUDGET));
+    expect(issues.size).toBe(0);
+  });
+
   it("records an issue on a changed file", async () => {
     const { tools, issues } = toolsFor(
       fakeGithub(
@@ -452,6 +502,113 @@ describe("emit_issue against the changed-file list", () => {
       ok: true,
     });
     expect(issues.size).toBe(1);
+  });
+});
+
+describe("emit_issue against the diff's hunks", () => {
+  const editPatch = ["@@ -1,1 +1,1 @@", "-const a = 1;", "+const a = 2;"].join(
+    "\n",
+  );
+
+  const deletionPatch = [
+    "@@ -1,3 +0,0 @@",
+    "-const token = readCsrf(req);",
+    "-if (!token) throw new Error('csrf');",
+    "-next();",
+  ].join("\n");
+
+  it("refuses an issue whose lines fall outside every hunk", async () => {
+    const { tools, issues, writer } = toolsFor(
+      fakeGithub([summary("index.js")], new Map([["index.js", editPatch]])),
+    );
+
+    const result = await callTool(tools.emit_issue, {
+      ...issueOn("index.js"),
+      line_start: 900,
+      line_end: 901,
+    });
+
+    expect(result).toMatchObject({ status: "lines_not_in_diff" });
+    expect(String(result.reason)).toContain("900-901");
+    expect(String(result.reason)).toContain("get_diff");
+    expect(String(result.reason)).not.toContain("get_pr_files_summary");
+    expect(issues.size).toBe(0);
+    expect(writer.write).not.toHaveBeenCalled();
+  });
+
+  it("escalates a file the model keeps missing into the retry guard, one file at a time", async () => {
+    const { tools, issues } = toolsFor(
+      fakeGithub(
+        [summary("index.js"), summary("other.js")],
+        new Map([
+          ["index.js", editPatch],
+          ["other.js", editPatch],
+        ]),
+      ),
+    );
+
+    const missOn = (file: string, offset: number) =>
+      callTool(tools.emit_issue, {
+        ...issueOn(file),
+        line_start: 900 + offset,
+        line_end: 901 + offset,
+      });
+
+    for (let i = 0; i < MAX_ISSUE_REFUSALS; i++) {
+      expect(await missOn("index.js", i)).toMatchObject({
+        status: "lines_not_in_diff",
+      });
+    }
+
+    const closed = await missOn("index.js", MAX_ISSUE_REFUSALS);
+
+    expect(closed).toMatchObject({ status: "retry_limit" });
+    expect(String(closed.reason)).toContain("index.js");
+    expect(issues.size).toBe(0);
+
+    expect(await missOn("other.js", 0)).toMatchObject({
+      status: "lines_not_in_diff",
+    });
+  });
+
+  it("records an issue about code this PR deletes outright", async () => {
+    const { tools, issues } = toolsFor(
+      fakeGithub(
+        [summary("lib/csrf.ts")],
+        new Map([["lib/csrf.ts", deletionPatch]]),
+      ),
+    );
+
+    expect(await callTool(tools.emit_issue, issueOn("lib/csrf.ts"))).toEqual({
+      ok: true,
+    });
+    expect(issues.size).toBe(1);
+  });
+
+  it("records an issue anchored to a hunk further down the file", async () => {
+    const patch = [
+      editPatch,
+      "@@ -40,2 +40,3 @@",
+      " const b = 1;",
+      "+const c = 3;",
+      " const d = 4;",
+    ].join("\n");
+    const { tools, issues } = toolsFor(
+      fakeGithub([summary("index.js")], new Map([["index.js", patch]])),
+    );
+
+    expect(
+      await callTool(tools.emit_issue, {
+        ...issueOn("index.js"),
+        line_start: 41,
+        line_end: 41,
+      }),
+    ).toEqual({ ok: true });
+
+    const [issue] = [...issues.values()];
+    expect(issue.codeLines.filter((line) => line.target)).toEqual([
+      { lineno: 41, content: "const c = 3;", kind: "added", target: true },
+    ]);
   });
 });
 

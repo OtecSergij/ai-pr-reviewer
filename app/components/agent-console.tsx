@@ -19,10 +19,10 @@ type AgentConsoleProps = {
   notice?: string | null;
 };
 
-const BOLD_MARKER = /\*\*/g;
+const BOLD_PAIR = /\*\*(?=\S)((?:[^*]|\*(?!\*))*[^\s*])\*\*/g;
 
-function stripBoldMarkers(text: string): string {
-  return text.replace(BOLD_MARKER, "");
+export function stripBoldMarkers(text: string): string {
+  return text.replace(BOLD_PAIR, "$1");
 }
 
 function isConsoleEntry(entry: TranscriptEntry): boolean {
@@ -172,7 +172,7 @@ export const AgentConsole = memo(function AgentConsole({
                 className="whitespace-pre-wrap font-mono text-[12px] leading-[1.75] text-muted"
                 style={{ marginTop: i === 0 ? 0 : 10 }}
               >
-                {entry.text}
+                {stripBoldMarkers(entry.text)}
                 {streaming ? <span className="text-subtle">▌</span> : null}
               </div>
             );

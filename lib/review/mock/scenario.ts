@@ -319,6 +319,27 @@ const finishLengthScenario: MockScenario = {
   finishReason: "length",
 };
 
+const finishLengthReadAllScenario: MockScenario = {
+  steps: [
+    textStep("read-all-text-1", [
+      "Reading every changed file ",
+      "before judging any of them.",
+    ]),
+    metadataStep("read-all-call-1"),
+    filesStep("read-all-call-2"),
+    diffStep("read-all-call-3", "index.js"),
+    diffStep("read-all-call-4", "test/test.js"),
+    diffStep("read-all-call-5", "README.md"),
+    issueStep("read-all-call-6", mockModelIssues[0]),
+    textStep("read-all-text-2", [
+      "One issue so far. ",
+      "The second one is in `test/test.js`, where the describe label ",
+      "no longer matches the assertions it",
+    ]),
+  ],
+  finishReason: "length",
+};
+
 const SCENARIOS: Record<ScenarioName, MockScenario> = {
   clean: cleanScenario,
   rich: richScenario,
@@ -327,6 +348,7 @@ const SCENARIOS: Record<ScenarioName, MockScenario> = {
   "interleaved-text": interleavedTextScenario,
   reasoning: reasoningScenario,
   "finish-length": finishLengthScenario,
+  "finish-length-read-all": finishLengthReadAllScenario,
 };
 
 export function selectScenario(name: ScenarioName | undefined): MockScenario {

@@ -11,7 +11,9 @@ const SERVER_SIDE_MESSAGE =
   "The review couldn't be completed because of a problem on our end. Please try again later.";
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
-  "Your API key doesn't have access to this model, or its quota is exhausted.";
+  "The API key you entered doesn't have access to this model.";
+const NO_CREDIT_MESSAGE =
+  "The Anthropic account behind the API key you entered is out of credits. Add credits in the Anthropic console.";
 const REVIEW_UNAVAILABLE_MESSAGE =
   "The review service is temporarily unavailable. Please try again later.";
 const MODEL_UNAVAILABLE_MESSAGE = "The selected model isn't available.";
@@ -38,6 +40,7 @@ export type FailureReason =
   | "steps-exhausted"
   | "unavailable"
   | "auth"
+  | "key-rejected"
   | "aborted"
   | "unknown";
 
@@ -62,9 +65,19 @@ const CONTEXT_OVERFLOW_MARKERS = [
   "input is too large",
 ];
 
+const CREDIT_BALANCE_MARKER = "credit balance";
+
+function haystack(error: APICallError): string {
+  return `${error.message} ${error.responseBody ?? ""}`.toLowerCase();
+}
+
 function isContextOverflow(error: APICallError): boolean {
-  const haystack = `${error.message} ${error.responseBody ?? ""}`.toLowerCase();
-  return CONTEXT_OVERFLOW_MARKERS.some((marker) => haystack.includes(marker));
+  const text = haystack(error);
+  return CONTEXT_OVERFLOW_MARKERS.some((marker) => text.includes(marker));
+}
+
+function isCreditExhausted(error: APICallError): boolean {
+  return haystack(error).includes(CREDIT_BALANCE_MARKER);
 }
 
 function isAbort(error: unknown): boolean {
@@ -150,11 +163,15 @@ function classifyApiError(
     return { hop: true, reason: "timeout", message: TIMEOUT_MESSAGE };
   if (status === 401)
     return userKey
-      ? { hop: false, reason: "auth", message: INVALID_KEY_MESSAGE }
+      ? { hop: false, reason: "key-rejected", message: INVALID_KEY_MESSAGE }
+      : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
+  if (status === 402)
+    return userKey
+      ? { hop: false, reason: "key-rejected", message: NO_CREDIT_MESSAGE }
       : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 403)
     return userKey
-      ? { hop: false, reason: "auth", message: NO_ACCESS_MESSAGE }
+      ? { hop: false, reason: "key-rejected", message: NO_ACCESS_MESSAGE }
       : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 404)
     return {
@@ -183,24 +200,28 @@ function classifyApiError(
       message: TRANSIENT_MESSAGE,
       ...retryAfter(error),
     };
+  if (error.isRetryable)
+    return { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
   if (isContextOverflow(error))
     return {
       hop: true,
       reason: "context-overflow",
       message: TOO_LARGE_MESSAGE,
     };
-  if (error.isRetryable)
-    return { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
+  if (userKey && isCreditExhausted(error))
+    return { hop: false, reason: "key-rejected", message: NO_CREDIT_MESSAGE };
 
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }
 
 export function classifyFailure(
   error: unknown,
-  opts?: { userKey?: boolean },
+  opts?: { userKey?: boolean; signal?: AbortSignal },
 ): FailureVerdict {
   if (isAbort(error))
-    return { hop: false, reason: "aborted", message: SERVER_SIDE_MESSAGE };
+    return (opts?.signal?.aborted ?? true)
+      ? { hop: false, reason: "aborted", message: SERVER_SIDE_MESSAGE }
+      : { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
 
   if (RetryError.isInstance(error))
     return classifyFailure(error.lastError, opts);
@@ -257,6 +278,7 @@ const KIND_BY_REASON: Record<FailureReason, ErrorKind> = {
   "steps-exhausted": "review",
   unavailable: "review",
   auth: "review",
+  "key-rejected": "api-key",
   aborted: "review",
   unknown: "review",
 };

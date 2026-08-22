@@ -14,7 +14,9 @@ import { enrichIssue } from "@/lib/review/enrich-issue";
 import type { RepoContext } from "@/lib/github/repo-context";
 import {
   FILE_READ_BUDGET_BYTES,
+  ISSUE_REFUSAL_BUDGET,
   MAX_FILE_CONTENTS_BYTES,
+  MAX_ISSUE_REFUSALS,
   MAX_PARTS_PER_FILE,
   MAX_PART_REPEATS,
   PATCH_READ_BUDGET_CHARS,
@@ -32,6 +34,11 @@ type PatchPartResult =
       has_more: boolean;
       next_part: number | null;
     };
+
+type IssueRefusal = {
+  status: "not_in_pr" | "lines_not_in_diff" | "retry_limit";
+  reason: string;
+};
 
 function outcomeOf(output: unknown): string {
   if (output !== null && typeof output === "object" && "status" in output) {
@@ -85,8 +92,10 @@ export function createReviewTools(
   const partsPaid = new Set<string>();
   const partsByFile = new Map<string, string[]>();
   const filesPaid = new Set<string>();
+  const issueRefusals = new Map<string, number>();
   let patchCharsSpent = 0;
   let fileBytesSpent = 0;
+  let issueRefusalsSpent = 0;
 
   const partsOf = (filename: string, patch: string): string[] => {
     let parts = partsByFile.get(filename);
@@ -156,6 +165,29 @@ export function createReviewTools(
 
     const files = await gh.getPRFiles();
     return files.find((f) => f.previousFilename === file)?.filename ?? null;
+  };
+
+  const refuseIssue = (file: string, refusal: IssueRefusal): IssueRefusal => {
+    const refusals = issueRefusals.get(file) ?? 0;
+    issueRefusals.set(file, refusals + 1);
+
+    if (refusals >= MAX_ISSUE_REFUSALS) {
+      return {
+        status: "retry_limit",
+        reason: `${file} has been refused ${MAX_ISSUE_REFUSALS} times, so stop reporting issues about it — move on to another file, or finish the review.`,
+      };
+    }
+
+    if (issueRefusalsSpent >= ISSUE_REFUSAL_BUDGET) {
+      return {
+        status: "retry_limit",
+        reason: `This review has spent its allowance of ${ISSUE_REFUSAL_BUDGET} refused issues, so it will not take any more misses — report only issues you can anchor, or finish the review.`,
+      };
+    }
+
+    issueRefusalsSpent += 1;
+
+    return refusal;
   };
 
   return {
@@ -351,20 +383,43 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
                 "issue rejected: file not changed by this PR",
               );
 
-              return {
+              return refuseIssue(input.file, {
                 status: "not_in_pr",
                 reason: `${input.file} is not among the files this PR changes, so the issue was not recorded. Call get_pr_files_summary and report against one of the exact paths it lists — resending the same path will be refused again.`,
-              };
+              });
             }
 
-            const data = await enrichIssue(gh, repo, { ...input, file }, log);
-            const duplicate = UIIssues.has(data.id);
+            const { issue, anchorMissing } = await enrichIssue(
+              gh,
+              repo,
+              { ...input, file },
+              log,
+            );
+
+            if (anchorMissing) {
+              log.info(
+                {
+                  file,
+                  lineStart: input.line_start,
+                  lineEnd: input.line_end,
+                  severity: input.severity,
+                },
+                "issue rejected: lines outside every hunk of the diff",
+              );
+
+              return refuseIssue(file, {
+                status: "lines_not_in_diff",
+                reason: `Lines ${input.line_start}-${input.line_end} are outside every hunk of the diff of ${file}, so the issue was not recorded. Take the numbers from the @@ header of the hunk you mean in the diff part you already read, or ask get_diff for that part number again — resending the same range will be refused again.`,
+              });
+            }
+
+            const duplicate = UIIssues.has(issue.id);
 
             log.info(
               {
-                id: data.id,
-                severity: data.severity,
-                file: data.file,
+                id: issue.id,
+                severity: issue.severity,
+                file: issue.file,
                 duplicate,
               },
               "issue emitted",
@@ -374,8 +429,8 @@ unavailable – couldn't list it; see reason (e.g., the path is a file, not a di
               return { ok: true, duplicate: true };
             }
 
-            UIIssues.set(data.id, data);
-            writer.write({ type: "data-issue", data, transient: true });
+            UIIssues.set(issue.id, issue);
+            writer.write({ type: "data-issue", data: issue, transient: true });
             return { ok: true };
           },
         ),

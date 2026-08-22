@@ -12,8 +12,11 @@ import { parsePRUrl, type PRRef } from "@/lib/github/parse-url";
 import { createGithubAccess, type GithubAccess } from "@/lib/github/octokit";
 import { createReviewTools } from "@/lib/review/tools/review-tools";
 import { isGeneratedPath } from "@/lib/review/tools/generated-path";
-import { READING_TOOL_NAMES } from "@/lib/review/tools/tool-names";
-import { HANDOFF_NUDGE, SYSTEM } from "@/lib/review/system-prompt";
+import {
+  READING_TOOL_NAMES,
+  REVIEW_TOOL_NAMES,
+} from "@/lib/review/tools/tool-names";
+import { buildHandoffNudge, SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
 import { budgetCeiling, estimateInputTokens } from "@/lib/review/budget";
 import {
@@ -72,7 +75,8 @@ export async function runReview({
     headSha: string,
     title: string,
     isPrivate: boolean,
-    prFiles: ReviewFileSummary[];
+    prFiles: ReviewFileSummary[],
+    reviewable: ReviewFileSummary[];
 
   try {
     pr = parsePRUrl(prUrl);
@@ -145,16 +149,16 @@ export async function runReview({
       generated: isGeneratedPath(f.filename),
     }));
 
-    const reviewableFiles = prFiles.filter((f) => !f.generated).length;
+    reviewable = prFiles.filter((f) => !f.generated);
 
-    if (reviewableFiles > MAX_CHANGED_FILES) {
+    if (reviewable.length > MAX_CHANGED_FILES) {
       log.info(
         {
           owner: pr.owner,
           repo: pr.repo,
           prNumber: pr.prNumber,
           changedFiles: prMetadata.changedFiles,
-          reviewableFiles,
+          reviewableFiles: reviewable.length,
         },
         "review rejected: too many reviewable files",
       );
@@ -201,14 +205,33 @@ export async function runReview({
       const tools = createReviewTools(gh, UIIssues, repo, writer, log);
       const streamMessages: ModelMessage[] = [...messages];
       const verdicts: FailureVerdict[] = [];
-      let inheritedTranscript = false;
+      let handoffLeftUnreadFiles = false;
+      let nudgeIndex = -1;
 
       const inherit = (stepMessages: ModelMessage[]) => {
-        streamMessages.push(...sanitizeForHandoff(stepMessages), {
+        const segment = sanitizeForHandoff(stepMessages);
+        if (segment.length === 0 && nudgeIndex < 0) return;
+
+        if (nudgeIndex >= 0) streamMessages.splice(nudgeIndex, 1);
+        streamMessages.push(...segment);
+
+        const readFiles = diffsRead(streamMessages).filter((filename) =>
+          prFiles.some((f) => f.filename === filename),
+        );
+        const unreadFiles = (reviewable.length > 0 ? reviewable : prFiles)
+          .filter((f) => !readFiles.includes(f.filename))
+          .map((f) => f.filename);
+
+        nudgeIndex = streamMessages.length;
+        streamMessages.push({
           role: "user",
-          content: HANDOFF_NUDGE,
+          content: buildHandoffNudge({
+            issues: [...UIIssues.values()],
+            readFiles,
+            unreadFiles,
+          }),
         });
-        inheritedTranscript = true;
+        handoffLeftUnreadFiles = unreadFiles.length > 0;
       };
 
       const attemptTrail = () =>
@@ -335,7 +358,7 @@ export async function runReview({
           stopWhen: candidates[i].usesUserKey
             ? () => false
             : stepCountIs(MAX_STEPS),
-          prepareStep: inheritedTranscript
+          prepareStep: handoffLeftUnreadFiles
             ? ({ stepNumber }) =>
                 stepNumber === 0
                   ? { toolChoice: "required", activeTools: READING_TOOL_NAMES }
@@ -492,6 +515,7 @@ export async function runReview({
         const knownError: FailureVerdict = {
           ...classifyFailure(failure, {
             userKey: candidates[i].usesUserKey,
+            signal,
           }),
           provider: candidates[i].provider,
           modelId: candidates[i].modelId,
@@ -572,6 +596,34 @@ function saveSkipReason(
   if (incomplete) return "truncated";
   if (env.MOCK_REVIEW && !persistMock) return "mock";
   return null;
+}
+
+function diffsRead(messages: ModelMessage[]): string[] {
+  const files: string[] = [];
+
+  for (const message of messages) {
+    if (message.role !== "assistant" || typeof message.content === "string") {
+      continue;
+    }
+
+    for (const part of message.content) {
+      if (
+        part.type !== "tool-call" ||
+        part.toolName !== REVIEW_TOOL_NAMES.getDiff
+      ) {
+        continue;
+      }
+
+      const input = part.input as { filename?: unknown } | null | undefined;
+      const filename = input?.filename;
+
+      if (typeof filename === "string" && !files.includes(filename)) {
+        files.push(filename);
+      }
+    }
+  }
+
+  return files;
 }
 
 function sanitizeForHandoff(messages: ModelMessage[]): ModelMessage[] {

@@ -56,6 +56,8 @@ export function injectedStartError(): unknown {
       return apiError({ message: "Bad Request", statusCode: 400 });
     case "api-401":
       return apiError({ message: "Unauthorized", statusCode: 401 });
+    case "api-402":
+      return apiError({ message: "Payment Required", statusCode: 402 });
     case "api-403":
       return apiError({ message: "Forbidden", statusCode: 403 });
     case "api-404":
