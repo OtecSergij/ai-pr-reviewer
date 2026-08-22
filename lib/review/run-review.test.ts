@@ -122,6 +122,8 @@ const NUDGE_OPENING = "Your review above was interrupted mid-way";
 const GENERATED_FILE = "dist/ms.min.js";
 const TICK_MS = 250;
 const TICK_LIMIT = 4_000;
+const TICKS_PER_REAL_MS = 50;
+const NATIVE_SET_TIMEOUT = setTimeout;
 const TRANSIENT_MESSAGE =
   "The review service is busy right now. Please try again in a moment.";
 const RATE_LIMITED_MESSAGE = `${TRANSIENT_MESSAGE} The provider asked for about 30s before the next attempt.`;
@@ -215,6 +217,9 @@ const parseChunks = (lines: string[]): StreamChunk[] =>
     .filter((payload) => payload !== "[DONE]")
     .map((payload) => JSON.parse(payload) as StreamChunk);
 
+const sleepRealMs = (): Promise<void> =>
+  new Promise((resolve) => NATIVE_SET_TIMEOUT(resolve, 1));
+
 const consume = async (
   response: Response,
   onChunk?: (chunk: StreamChunk) => void,
@@ -247,6 +252,9 @@ const consume = async (
 
   for (let tick = 0; tick < TICK_LIMIT && !drained; tick++) {
     await vi.advanceTimersByTimeAsync(TICK_MS);
+    if (!drained && tick % TICKS_PER_REAL_MS === TICKS_PER_REAL_MS - 1) {
+      await sleepRealMs();
+    }
   }
 
   if (!drained) throw new Error("the review stream never finished");
