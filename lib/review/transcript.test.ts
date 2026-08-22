@@ -352,6 +352,7 @@ describe("isErrorKind", () => {
       "github",
       "rate-limit",
       "provider-quota",
+      "api-key",
       "review",
       "private",
       "too-many-files",

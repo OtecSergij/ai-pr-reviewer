@@ -515,6 +515,7 @@ export async function runReview({
         const knownError: FailureVerdict = {
           ...classifyFailure(failure, {
             userKey: candidates[i].usesUserKey,
+            signal,
           }),
           provider: candidates[i].provider,
           modelId: candidates[i].modelId,

@@ -15,6 +15,7 @@ const HEADLINES: Record<ErrorKind, string> = {
   github: "GitHub couldn’t serve this pull request",
   "rate-limit": "Rate limit reached",
   "provider-quota": "The review models are out of quota",
+  "api-key": "Your API key was rejected",
   private: "This pull request is private",
   review: "Review failed",
   "too-many-files": "This PR is too large to review",
@@ -25,6 +26,7 @@ const NON_RETRYABLE_KINDS: ReadonlySet<ErrorKind> = new Set([
   "private",
   "rate-limit",
   "too-many-files",
+  "api-key",
 ]);
 
 const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
@@ -56,6 +58,13 @@ const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
     <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
       The free model chain runs on shared per-minute quotas, so every model can
       be out of budget at once. A retry a minute later usually goes through.
+    </p>
+  ),
+  "api-key": (
+    <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
+      Anthropic refused this key, so another run with it ends the same way. Edit
+      URL takes you back to the form — paste a working key there, or clear “Use
+      Claude Sonnet” to run on the free models.
     </p>
   ),
 };

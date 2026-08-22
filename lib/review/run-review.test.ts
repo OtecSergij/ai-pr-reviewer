@@ -122,6 +122,10 @@ const NUDGE_OPENING = "Your review above was interrupted mid-way";
 const GENERATED_FILE = "dist/ms.min.js";
 const TICK_MS = 250;
 const TICK_LIMIT = 4_000;
+const TRANSIENT_MESSAGE =
+  "The review service is busy right now. Please try again in a moment.";
+const RATE_LIMITED_MESSAGE = `${TRANSIENT_MESSAGE} The provider asked for about 30s before the next attempt.`;
+const CHAIN_FAILED = "review failed after providers exhausted";
 
 type LoadOptions = {
   scenario?: string;
@@ -330,6 +334,19 @@ const notSavedReasons = (): unknown[] =>
   logRecords
     .filter((entry) => entry.msg === "review not saved")
     .map((entry) => entry.data.reason);
+
+const errorTextsIn = (chunks: StreamChunk[]): unknown[] =>
+  chunks
+    .filter((chunk) => chunk.type === "error")
+    .map((chunk) => chunk.errorText);
+
+const chainFailure = (): Record<string, unknown> => {
+  const found = logRecords.filter((entry) => entry.msg === CHAIN_FAILED);
+  if (found.length !== 1) {
+    throw new Error(`the run logged ${found.length} exhausted chains`);
+  }
+  return found[0].data;
+};
 
 beforeEach(() => {
   transcripts.length = 0;
@@ -639,6 +656,61 @@ describe("a chain whose first model dies mid-stream", () => {
     const chunks = await review(runReview);
 
     expect(dataOf(chunks, "data-issue").length).toBeGreaterThan(0);
+  });
+});
+
+describe("a chain every link of which is rate limited", () => {
+  it("shows the card of the link that failed last", async () => {
+    const { runReview } = await loadRunReview({ error: "api-429" });
+    const chunks = await review(runReview);
+
+    expect(dataOf(chunks, "data-failover")).toEqual([
+      { from: "groq", to: "cerebras", reason: "rate-limit" },
+      { from: "cerebras", to: "google", reason: "rate-limit" },
+    ]);
+    expect(dataOf(chunks, "data-errorKind")).toEqual([
+      { kind: "provider-quota" },
+    ]);
+    expect(errorTextsIn(chunks)).toEqual([RATE_LIMITED_MESSAGE]);
+    expect(chainFailure()).toMatchObject({
+      shownReason: "rate-limit",
+      shownProvider: "google",
+      retryAfterSec: 30,
+    });
+  });
+
+  it("names every attempt it made before giving up", async () => {
+    const { runReview } = await loadRunReview({ error: "api-429" });
+    await review(runReview);
+
+    expect(chainFailure().attempts).toEqual([
+      {
+        provider: "groq",
+        modelId: "openai/gpt-oss-120b",
+        reason: "rate-limit",
+      },
+      { provider: "cerebras", modelId: "gpt-oss-120b", reason: "rate-limit" },
+      { provider: "google", modelId: "gemini-2.5-flash", reason: "rate-limit" },
+    ]);
+  });
+});
+
+describe("a chain whose links report an abort no one asked for", () => {
+  it("hands off instead of ending the review on the first link", async () => {
+    const { runReview } = await loadRunReview({ error: "abort" });
+    const chunks = await review(runReview);
+
+    expect(dataOf(chunks, "data-failover")).toEqual([
+      { from: "groq", to: "cerebras", reason: "server" },
+      { from: "cerebras", to: "google", reason: "server" },
+    ]);
+    expect(dataOf(chunks, "data-errorKind")).toEqual([{ kind: "review" }]);
+    expect(errorTextsIn(chunks)).toEqual([TRANSIENT_MESSAGE]);
+    expect(chainFailure()).toMatchObject({
+      reason: "server",
+      shownReason: "server",
+      shownProvider: "google",
+    });
   });
 });
 

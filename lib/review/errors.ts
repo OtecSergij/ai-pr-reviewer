@@ -11,7 +11,7 @@ const SERVER_SIDE_MESSAGE =
   "The review couldn't be completed because of a problem on our end. Please try again later.";
 const INVALID_KEY_MESSAGE = "The API key you entered is invalid.";
 const NO_ACCESS_MESSAGE =
-  "Your API key doesn't have access to this model, or its quota is exhausted.";
+  "The API key you entered doesn't have access to this model.";
 const REVIEW_UNAVAILABLE_MESSAGE =
   "The review service is temporarily unavailable. Please try again later.";
 const MODEL_UNAVAILABLE_MESSAGE = "The selected model isn't available.";
@@ -38,6 +38,7 @@ export type FailureReason =
   | "steps-exhausted"
   | "unavailable"
   | "auth"
+  | "key-rejected"
   | "aborted"
   | "unknown";
 
@@ -150,11 +151,11 @@ function classifyApiError(
     return { hop: true, reason: "timeout", message: TIMEOUT_MESSAGE };
   if (status === 401)
     return userKey
-      ? { hop: false, reason: "auth", message: INVALID_KEY_MESSAGE }
+      ? { hop: false, reason: "key-rejected", message: INVALID_KEY_MESSAGE }
       : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 403)
     return userKey
-      ? { hop: false, reason: "auth", message: NO_ACCESS_MESSAGE }
+      ? { hop: false, reason: "key-rejected", message: NO_ACCESS_MESSAGE }
       : { hop: true, reason: "auth", message: REVIEW_UNAVAILABLE_MESSAGE };
   if (status === 404)
     return {
@@ -183,24 +184,26 @@ function classifyApiError(
       message: TRANSIENT_MESSAGE,
       ...retryAfter(error),
     };
+  if (error.isRetryable)
+    return { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
   if (isContextOverflow(error))
     return {
       hop: true,
       reason: "context-overflow",
       message: TOO_LARGE_MESSAGE,
     };
-  if (error.isRetryable)
-    return { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
 
   return { hop: true, reason: "unknown", message: SERVER_SIDE_MESSAGE };
 }
 
 export function classifyFailure(
   error: unknown,
-  opts?: { userKey?: boolean },
+  opts?: { userKey?: boolean; signal?: AbortSignal },
 ): FailureVerdict {
   if (isAbort(error))
-    return { hop: false, reason: "aborted", message: SERVER_SIDE_MESSAGE };
+    return (opts?.signal?.aborted ?? true)
+      ? { hop: false, reason: "aborted", message: SERVER_SIDE_MESSAGE }
+      : { hop: true, reason: "server", message: TRANSIENT_MESSAGE };
 
   if (RetryError.isInstance(error))
     return classifyFailure(error.lastError, opts);
@@ -257,6 +260,7 @@ const KIND_BY_REASON: Record<FailureReason, ErrorKind> = {
   "steps-exhausted": "review",
   unavailable: "review",
   auth: "review",
+  "key-rejected": "api-key",
   aborted: "review",
   unknown: "review",
 };

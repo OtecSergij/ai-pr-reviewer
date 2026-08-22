@@ -28,6 +28,7 @@ const REASON_LABELS: Record<FailureReason, string> = {
   "steps-exhausted": "hit the step ceiling",
   unavailable: "is unavailable",
   auth: "failed",
+  "key-rejected": "rejected the key",
   aborted: "failed",
   unknown: "failed",
 };
