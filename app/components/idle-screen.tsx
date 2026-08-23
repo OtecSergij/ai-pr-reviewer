@@ -187,7 +187,7 @@ export function IdleScreen({
               <input
                 type="password"
                 value={premiumKey}
-                onChange={(e) => onPremiumKeyChange(e.target.value)}
+                onChange={(e) => onPremiumKeyChange(e.target.value.trim())}
                 required
                 placeholder="Anthropic API key (sk-ant-…)"
                 aria-label="Anthropic API key"
