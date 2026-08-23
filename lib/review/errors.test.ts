@@ -253,7 +253,10 @@ describe("classifyFailure billing refusals", () => {
   it("reads the same wording out of the message, whatever its case", () => {
     expect(
       classifyFailure(
-        apiError({ statusCode: 400, message: "Your Credit Balance Is Too Low" }),
+        apiError({
+          statusCode: 400,
+          message: "Your Credit Balance Is Too Low",
+        }),
         { userKey: true },
       ),
     ).toMatchObject({ reason: "key-rejected", message: NO_CREDIT_MESSAGE });

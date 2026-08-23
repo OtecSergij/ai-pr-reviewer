@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npx next typegen
       - run: npm run lint
+      - run: npm run format:check
       - run: npx tsc --noEmit
       - run: npm test
       - name: Assert startup preload is wired into the entrypoint
