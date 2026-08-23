@@ -26,14 +26,16 @@ const overheadTokens =
   estimateInputTokens(opening, tools) -
   Math.ceil(JSON.stringify(opening).length / 3.5);
 
+const OVERHEAD_LIMIT = Math.floor(budgetCeiling(8_000) * 0.55);
+
 describe("the fixed per-request overhead", () => {
   it("counts more than the system prompt, because six tool schemas ride along", () => {
     expect(overheadTokens).toBeGreaterThan(Math.ceil(SYSTEM.length / 3.5));
   });
 
-  it("stays in the band the free budgets were sized against", () => {
+  it("stays under 55 % of the tightest free candidate's ceiling, so diffs still fit", () => {
     expect(overheadTokens).toBeGreaterThan(2_000);
-    expect(overheadTokens).toBeLessThan(3_500);
+    expect(overheadTokens).toBeLessThanOrEqual(OVERHEAD_LIMIT);
   });
 
   it("tracks the tool set, so a wordier schema raises the estimate", () => {
