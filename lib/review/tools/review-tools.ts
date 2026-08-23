@@ -315,7 +315,7 @@ unavailable – couldn't read the file; see reason (e.g., the path is a director
             }
 
             if (!filesPaid.has(input.path)) {
-              fileBytesSpent += content.length;
+              fileBytesSpent += Buffer.byteLength(content);
               filesPaid.add(input.path);
             }
 

@@ -631,6 +631,20 @@ describe("get_file_contents read budget", () => {
     });
   }
 
+  function servingCyrillicFiles() {
+    const content = "я".repeat(MAX_FILE_CONTENTS_BYTES / 2);
+
+    return fakeGithub([summary("index.js")], new Map(), {
+      getFileContents: async ({ path, ref }): Promise<FileContents> => ({
+        path,
+        ref,
+        content,
+        size: Buffer.byteLength(content),
+        sha: "sha",
+      }),
+    });
+  }
+
   const readFile = (tools: ReviewTools, path: string) =>
     callTool(tools.get_file_contents, { path });
 
@@ -657,6 +671,20 @@ describe("get_file_contents read budget", () => {
 
     expect(await readFile(tools, "src/f0.ts")).toMatchObject({
       size: MAX_FILE_CONTENTS_BYTES,
+    });
+  });
+
+  it("charges a non-ASCII file its bytes, not its characters", async () => {
+    const { tools } = toolsFor(servingCyrillicFiles());
+
+    for (let i = 0; i < READS_TO_EXHAUST; i++) {
+      expect(await readFile(tools, `src/f${i}.ts`)).toMatchObject({
+        size: MAX_FILE_CONTENTS_BYTES,
+      });
+    }
+
+    expect(await readFile(tools, "src/last.ts")).toEqual({
+      status: "read_limit",
     });
   });
 
