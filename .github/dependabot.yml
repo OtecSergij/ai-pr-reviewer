@@ -8,10 +8,41 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Split by semver level so a breaking major cannot hold the minor/patch
+    # bumps back. The framework gets a group of its own, so its patches do not
+    # wait on an unrelated package failing in the shared one.
     groups:
-      all:
+      next:
+        patterns:
+          - next
+          - eslint-config-next
+        update-types:
+          - minor
+          - patch
+      minor-and-patch:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
+      major:
+        patterns:
+          - "*"
+        update-types:
+          - major
+    # Dependabot places a dependency by its newest allowed version, so one with
+    # a pending major gets no minor/patch bump at all. Ignoring the majors held
+    # back on purpose keeps the patches of their current line flowing.
+    ignore:
+      - dependency-name: ai
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@ai-sdk/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
   - package-ecosystem: docker
     directory: /
     schedule:
