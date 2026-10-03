@@ -18,6 +18,7 @@ import {
 } from "@/lib/review/tools/tool-names";
 import { buildHandoffNudge, SYSTEM } from "@/lib/review/system-prompt";
 import { selectModels } from "@/lib/ai/provider";
+import { recordProviderFailure } from "@/lib/ai/provider-health";
 import { budgetCeiling, estimateInputTokens } from "@/lib/review/budget";
 import {
   MAX_CHANGED_FILES,
@@ -526,6 +527,7 @@ export async function runReview({
         }
 
         verdicts.push(knownError);
+        recordProviderFailure(candidates[i], knownError.reason, failure, log);
 
         if (i < candidates.length - 1 && knownError.hop) {
           log.warn(

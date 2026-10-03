@@ -27,12 +27,18 @@ const {
   transcripts,
   streamOptions,
   logRecords,
+  reportedFailures,
   saveReviewMock,
   githubAccessMock,
 } = vi.hoisted(() => ({
   transcripts: [] as unknown[][],
   streamOptions: [] as StreamOptions[],
   logRecords: [] as LogRecord[],
+  reportedFailures: [] as {
+    provider: string;
+    reason: string;
+    status: number | null;
+  }[],
   saveReviewMock: vi.fn(),
   githubAccessMock: vi.fn(),
 }));
@@ -88,6 +94,26 @@ vi.mock("@/lib/review/budget", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/ai/provider-health", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/ai/provider-health")>();
+
+  return {
+    ...actual,
+    recordProviderFailure: (
+      ...args: Parameters<typeof actual.recordProviderFailure>
+    ) => {
+      const [candidate, reason, error] = args;
+      reportedFailures.push({
+        provider: candidate.provider,
+        reason,
+        status: (error as { statusCode?: number }).statusCode ?? null,
+      });
+      actual.recordProviderFailure(...args);
+    },
+  };
+});
+
 vi.mock("@/lib/github/octokit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/github/octokit")>();
   return { ...actual, createGithubAccess: githubAccessMock };
@@ -127,6 +153,7 @@ const NATIVE_SET_TIMEOUT = setTimeout;
 const GEMINI_SERVER_ERROR = "Gemini had a server error.";
 const GEMINI_RATE_LIMITED = "Gemini hit rate limits. Try again in about 30s.";
 const CHAIN_FAILED = "review failed after providers exhausted";
+const DEAD_PROVIDER = "provider dead";
 
 type LoadOptions = {
   scenario?: string;
@@ -359,6 +386,7 @@ beforeEach(() => {
   transcripts.length = 0;
   streamOptions.length = 0;
   logRecords.length = 0;
+  reportedFailures.length = 0;
   saveReviewMock.mockReset();
   saveReviewMock.mockResolvedValue("vercel-ms-17-7c2d4f1b");
   githubAccessMock.mockReset();
@@ -703,6 +731,52 @@ describe("a chain every link of which is rate limited", () => {
         reason: "rate-limit",
       },
     ]);
+  });
+});
+
+describe("a chain every link of which refuses the server key", () => {
+  it("reports each refusal to the provider health check, the last link included", async () => {
+    const { runReview } = await loadRunReview({ error: "api-402" });
+    await review(runReview);
+
+    expect(reportedFailures).toEqual([
+      { provider: "groq", reason: "auth", status: 402 },
+      { provider: "cerebras", reason: "auth", status: 402 },
+      { provider: "google", reason: "auth", status: 402 },
+    ]);
+  });
+
+  it("still fails over on the routine warning", async () => {
+    const { runReview } = await loadRunReview({ error: "api-402" });
+    const chunks = await review(runReview);
+
+    expect(dataOf(chunks, "data-failover")).toEqual([
+      { from: "groq", to: "cerebras", reason: "auth" },
+      { from: "cerebras", to: "google", reason: "auth" },
+    ]);
+    expect(
+      logRecords
+        .filter((entry) => entry.msg === "provider failover")
+        .map((entry) => entry.level),
+    ).toEqual(["warn", "warn"]);
+  });
+
+  it("raises no dead-provider alarm over a refusal the mock injected", async () => {
+    const { runReview } = await loadRunReview({ error: "api-402" });
+    await review(runReview);
+
+    expect(logRecords.filter((entry) => entry.msg === DEAD_PROVIDER)).toEqual(
+      [],
+    );
+  });
+});
+
+describe("a review that ends without a provider failure", () => {
+  it("reports nothing to the provider health check", async () => {
+    const { runReview } = await loadRunReview();
+    await review(runReview);
+
+    expect(reportedFailures).toEqual([]);
   });
 });
 
