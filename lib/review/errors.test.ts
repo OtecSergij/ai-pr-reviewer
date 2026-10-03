@@ -852,4 +852,50 @@ describe("verdictMessage", () => {
       }),
     ).toContain("2 min");
   });
+
+  const BUSY =
+    "The review service is busy right now. Please try again in a moment.";
+
+  it("puts the provider where the copy says 'the review service'", () => {
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "server",
+        message: BUSY,
+        provider: "google",
+      }),
+    ).toBe("Gemini had a server error.");
+  });
+
+  it("keeps only the wait that belongs to this run", () => {
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "rate-limit",
+        message: BUSY,
+        retryAfterSec: 45,
+        provider: "groq",
+      }),
+    ).toBe("Groq hit rate limits. Try again in about 45s.");
+  });
+
+  it("leaves a message that already names its subject alone", () => {
+    expect(
+      verdictMessage({
+        ...OVER_BUDGET_VERDICT,
+        provider: "google",
+      }),
+    ).toBe(OVER_BUDGET_VERDICT.message);
+  });
+
+  it("stays quiet about a rejected BYO key, whose provider is the reader's own", () => {
+    expect(
+      verdictMessage({
+        hop: false,
+        reason: "key-rejected",
+        message: "The API key you entered is invalid.",
+        provider: "anthropic",
+      }),
+    ).toBe("The API key you entered is invalid.");
+  });
 });

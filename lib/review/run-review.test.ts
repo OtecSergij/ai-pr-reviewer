@@ -124,9 +124,8 @@ const TICK_MS = 250;
 const TICK_LIMIT = 4_000;
 const TICKS_PER_REAL_MS = 50;
 const NATIVE_SET_TIMEOUT = setTimeout;
-const TRANSIENT_MESSAGE =
-  "The review service is busy right now. Please try again in a moment.";
-const RATE_LIMITED_MESSAGE = `${TRANSIENT_MESSAGE} The provider asked for about 30s before the next attempt.`;
+const GEMINI_SERVER_ERROR = "Gemini had a server error.";
+const GEMINI_RATE_LIMITED = "Gemini hit rate limits. Try again in about 30s.";
 const CHAIN_FAILED = "review failed after providers exhausted";
 
 type LoadOptions = {
@@ -679,7 +678,7 @@ describe("a chain every link of which is rate limited", () => {
     expect(dataOf(chunks, "data-errorKind")).toEqual([
       { kind: "provider-quota" },
     ]);
-    expect(errorTextsIn(chunks)).toEqual([RATE_LIMITED_MESSAGE]);
+    expect(errorTextsIn(chunks)).toEqual([GEMINI_RATE_LIMITED]);
     expect(chainFailure()).toMatchObject({
       shownReason: "rate-limit",
       shownProvider: "google",
@@ -717,7 +716,7 @@ describe("a chain whose links report an abort no one asked for", () => {
       { from: "cerebras", to: "google", reason: "server" },
     ]);
     expect(dataOf(chunks, "data-errorKind")).toEqual([{ kind: "review" }]);
-    expect(errorTextsIn(chunks)).toEqual([TRANSIENT_MESSAGE]);
+    expect(errorTextsIn(chunks)).toEqual([GEMINI_SERVER_ERROR]);
     expect(chainFailure()).toMatchObject({
       reason: "server",
       shownReason: "server",
