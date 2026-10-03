@@ -29,7 +29,11 @@ describe("the free chain", () => {
     expect(selectModels(undefined, log).map(identity)).toEqual([
       { provider: "groq", modelId: "openai/gpt-oss-120b", usesUserKey: false },
       { provider: "cerebras", modelId: "gpt-oss-120b", usesUserKey: false },
-      { provider: "google", modelId: "gemini-2.5-flash", usesUserKey: false },
+      {
+        provider: "google",
+        modelId: "gemini-flash-latest",
+        usesUserKey: false,
+      },
     ]);
   });
 });
@@ -62,7 +66,7 @@ describe("the budgets each candidate declares", () => {
         maxOutputTokens: 6_000,
       },
       {
-        modelId: "gemini-2.5-flash",
+        modelId: "gemini-flash-latest",
         contextWindow: 1_048_576,
         tpmBudget: 250_000,
         maxOutputTokens: 24_000,

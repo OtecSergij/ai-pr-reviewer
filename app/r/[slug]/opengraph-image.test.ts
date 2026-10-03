@@ -38,7 +38,7 @@ const row: ReviewRow = {
   headSha: "abcdef0",
   prTitle: "Fix the thing",
   issues: [],
-  modelId: "gemini-2.5-flash",
+  modelId: "gemini-flash-latest",
   createdAt: new Date("2026-08-12T00:00:00Z"),
 };
 

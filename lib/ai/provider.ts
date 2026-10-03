@@ -98,8 +98,11 @@ function serverKeyChain(log: Logger): ModelCandidate[] {
       maxRetries: 0,
     },
     {
+      // The alias, not a pinned version: a pin 404s once Google retires it
+      // for projects that never called it. The budgets below hold because the
+      // free tier rates the whole flash line alike, not any one version.
       model: wrapLanguageModel({
-        model: google("gemini-2.5-flash"),
+        model: google("gemini-flash-latest"),
         middleware: defaultSettingsMiddleware({
           settings: {
             providerOptions: {
@@ -109,7 +112,7 @@ function serverKeyChain(log: Logger): ModelCandidate[] {
         }),
       }),
       provider: "google",
-      modelId: "gemini-2.5-flash",
+      modelId: "gemini-flash-latest",
       usesUserKey: false,
       contextWindow: 1_048_576,
       tpmBudget: 250_000,
