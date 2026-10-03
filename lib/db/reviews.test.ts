@@ -73,7 +73,7 @@ const input = {
   ...identity,
   prTitle: "Fix the thing",
   issues: [],
-  modelId: "gemini-2.5-flash",
+  modelId: "gemini-flash-latest",
 };
 
 const row: ReviewRow = {
@@ -84,7 +84,7 @@ const row: ReviewRow = {
   headSha: "abcdef0",
   prTitle: "Fix the thing",
   issues: [],
-  modelId: "gemini-2.5-flash",
+  modelId: "gemini-flash-latest",
   createdAt: new Date("2026-08-12T00:00:00Z"),
 };
 
@@ -119,7 +119,7 @@ describe("saveReview", () => {
       headSha: "ABCDEF0",
       prTitle: "Fix the thing",
       issues: [],
-      modelId: "gemini-2.5-flash",
+      modelId: "gemini-flash-latest",
     });
 
     const { target, set } = conflict as { target: unknown; set: unknown };
@@ -129,7 +129,7 @@ describe("saveReview", () => {
       repo: "Next.js",
       prTitle: "Fix the thing",
       issues: [],
-      modelId: "gemini-2.5-flash",
+      modelId: "gemini-flash-latest",
       createdAt: sql`now()`,
     });
   });

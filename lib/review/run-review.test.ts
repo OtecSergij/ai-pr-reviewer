@@ -396,7 +396,7 @@ describe("a chain where every model stops on length", () => {
     expect(dataOf(chunks, "data-meta").map((meta) => meta.model)).toEqual([
       "openai/gpt-oss-120b",
       "gpt-oss-120b",
-      "gemini-2.5-flash",
+      "gemini-flash-latest",
     ]);
   });
 
@@ -698,7 +698,11 @@ describe("a chain every link of which is rate limited", () => {
         reason: "rate-limit",
       },
       { provider: "cerebras", modelId: "gpt-oss-120b", reason: "rate-limit" },
-      { provider: "google", modelId: "gemini-2.5-flash", reason: "rate-limit" },
+      {
+        provider: "google",
+        modelId: "gemini-flash-latest",
+        reason: "rate-limit",
+      },
     ]);
   });
 });
