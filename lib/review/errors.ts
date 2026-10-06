@@ -293,13 +293,6 @@ function retryHint(seconds: number): string {
   return `${Math.ceil(seconds / 60)} min`;
 }
 
-/**
- * The messages that say "the review service" because nothing better was known
- * at the time they were written. When the verdict carries a provider, it IS
- * known, and naming it replaces the vague subject rather than trailing after
- * it. Every other message is specific already — what the diff did, what the
- * reader's own key did — and is left exactly as it is.
- */
 const UNNAMED_SUBJECT_MESSAGES: ReadonlySet<string> = new Set([
   TRANSIENT_MESSAGE,
   SERVER_SIDE_MESSAGE,
@@ -308,8 +301,6 @@ const UNNAMED_SUBJECT_MESSAGES: ReadonlySet<string> = new Set([
 ]);
 
 export function verdictMessage(verdict: FailureVerdict): string {
-  // Withheld for a rejected BYO key: there the provider is the reader's own,
-  // and the message already names it.
   const lead =
     verdict.provider !== undefined &&
     verdict.reason !== "key-rejected" &&
@@ -317,8 +308,6 @@ export function verdictMessage(verdict: FailureVerdict): string {
       ? `${providerLabel(verdict.provider)} ${reasonLabel(verdict.reason)}.`
       : verdict.message;
 
-  // The card already carries the standing advice to retry; this is the only
-  // number specific to this run, so it is the only one worth a sentence.
   if (verdict.retryAfterSec === undefined) return lead;
   return `${lead} Try again in about ${retryHint(verdict.retryAfterSec)}.`;
 }

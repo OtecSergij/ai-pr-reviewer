@@ -1,8 +1,6 @@
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { PatchPart } from "@/lib/review/transcript";
 
-// The console narrates the hops; lib/review/errors.ts ends the story with
-// the same words. Re-exported so callers here keep one import site.
 export { providerLabel, reasonLabel } from "@/lib/review/failure-labels";
 
 export function toolLabel(
