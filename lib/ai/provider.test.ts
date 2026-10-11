@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import pino from "pino";
 import { selectModels, type ModelCandidate } from "./provider";
+import { linkLabel } from "@/lib/review/failure-labels";
 
 const log = pino({ level: "silent" });
 
@@ -25,16 +26,50 @@ const chains = [
 ] as const;
 
 describe("the free chain", () => {
-  it("runs Groq, then Cerebras, then Gemini, all on server keys", () => {
+  it("runs Groq, then two OpenRouter models, then Gemini, all on server keys", () => {
     expect(selectModels(undefined, log).map(identity)).toEqual([
       { provider: "groq", modelId: "openai/gpt-oss-120b", usesUserKey: false },
-      { provider: "cerebras", modelId: "gpt-oss-120b", usesUserKey: false },
+      {
+        provider: "openrouter",
+        modelId: "nvidia/nemotron-3-super-120b-a12b:free",
+        usesUserKey: false,
+      },
+      {
+        provider: "openrouter",
+        modelId: "cohere/north-mini-code:free",
+        usesUserKey: false,
+      },
       {
         provider: "google",
         modelId: "gemini-flash-latest",
         usesUserKey: false,
       },
     ]);
+  });
+});
+
+describe("the free chain's OpenRouter links", () => {
+  const links = () =>
+    selectModels(undefined, log).filter(
+      (candidate) => candidate.provider === "openrouter",
+    );
+
+  it("only ever name free model variants, so the chain cannot bill", () => {
+    expect(links().length).toBeGreaterThan(0);
+
+    for (const link of links()) {
+      expect(link.modelId.endsWith(":free")).toBe(true);
+    }
+  });
+});
+
+describe("the names the free chain's links go by", () => {
+  it("are all different, so a failover line never reads X switching to X", () => {
+    const labels = selectModels(undefined, log).map((candidate) =>
+      linkLabel(candidate.provider, candidate.modelId),
+    );
+
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });
 
@@ -60,10 +95,16 @@ describe("the budgets each candidate declares", () => {
         maxOutputTokens: undefined,
       },
       {
-        modelId: "gpt-oss-120b",
-        contextWindow: 65_536,
-        tpmBudget: 30_000,
-        maxOutputTokens: 6_000,
+        modelId: "nvidia/nemotron-3-super-120b-a12b:free",
+        contextWindow: 262_144,
+        tpmBudget: 200_000,
+        maxOutputTokens: 16_000,
+      },
+      {
+        modelId: "cohere/north-mini-code:free",
+        contextWindow: 256_000,
+        tpmBudget: 200_000,
+        maxOutputTokens: 16_000,
       },
       {
         modelId: "gemini-flash-latest",

@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import pino from "pino";
 import { APICallError } from "ai";
-import { isTtfbTimeout, tracedFetch, ttfbTimeoutError } from "./provider-fetch";
+import {
+  RATE_LIMIT_RESET_MARGIN_MS,
+  RATE_LIMIT_WAITS,
+  RATE_LIMIT_WAIT_CEILING_MS,
+  isTtfbTimeout,
+  tracedFetch,
+  ttfbTimeoutError,
+  waitingOutRateLimit,
+} from "./provider-fetch";
 
 const log = pino({ level: "silent" });
 const URL_UNDER_TEST = "https://api.groq.com/openai/v1/chat/completions";
@@ -11,6 +19,7 @@ const realFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = realFetch;
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 function stubFetch(impl: typeof fetch): void {
@@ -164,8 +173,150 @@ describe("tracedFetch on a transport failure", () => {
       throw boom;
     });
 
-    await expect(tracedFetch("cerebras", log)(URL_UNDER_TEST)).rejects.toBe(
+    await expect(tracedFetch("openrouter", log)(URL_UNDER_TEST)).rejects.toBe(
       boom,
     );
+  });
+});
+
+describe("waitingOutRateLimit", () => {
+  const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+  const NOW = Date.parse("2026-10-04T12:00:20.000Z");
+  const WINDOW_RESET = Date.parse("2026-10-04T12:01:00.000Z");
+  const UNTIL_RESET_MS = WINDOW_RESET - NOW;
+
+  const rateLimited = (resetAt?: number): Response =>
+    new Response('{"error":{"code":429}}', {
+      status: 429,
+      headers:
+        resetAt === undefined ? {} : { "x-ratelimit-reset": String(resetAt) },
+    });
+
+  const answered = (): Response => new Response("{}", { status: 200 });
+
+  const frozenClock = (): void => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  };
+
+  it("waits for the per-minute window to reset, then asks again", async () => {
+    frozenClock();
+    const inner = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(rateLimited(WINDOW_RESET))
+      .mockResolvedValueOnce(answered());
+
+    const pending = waitingOutRateLimit(
+      "openrouter",
+      log,
+      inner,
+    )(OPENROUTER_URL);
+
+    await vi.advanceTimersByTimeAsync(
+      UNTIL_RESET_MS + RATE_LIMIT_RESET_MARGIN_MS - 1,
+    );
+    expect(inner).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await pending).status).toBe(200);
+    expect(inner).toHaveBeenCalledTimes(2);
+  });
+
+  it("says in the log how long it is waiting", async () => {
+    frozenClock();
+    const { records, logger } = collectingLogger();
+    const inner = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(rateLimited(WINDOW_RESET))
+      .mockResolvedValueOnce(answered());
+
+    const pending = waitingOutRateLimit(
+      "openrouter",
+      logger,
+      inner,
+    )(OPENROUTER_URL);
+    await vi.runAllTimersAsync();
+    await pending;
+
+    expect(records).toMatchObject([
+      {
+        level: 40,
+        provider: "openrouter",
+        waitMs: UNTIL_RESET_MS + RATE_LIMIT_RESET_MARGIN_MS,
+        msg: "provider rate limited, waiting for the window to reset",
+      },
+    ]);
+  });
+
+  it("hands back a refusal whose window resets too far away to wait for", async () => {
+    frozenClock();
+    const dailyLimit = rateLimited(NOW + RATE_LIMIT_WAIT_CEILING_MS);
+    const inner = vi.fn<typeof fetch>().mockResolvedValue(dailyLimit);
+
+    await expect(
+      waitingOutRateLimit("openrouter", log, inner)(OPENROUTER_URL),
+    ).resolves.toBe(dailyLimit);
+    expect(inner).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands back a refusal that names no reset", async () => {
+    const refusal = rateLimited();
+    const inner = vi.fn<typeof fetch>().mockResolvedValue(refusal);
+
+    await expect(
+      waitingOutRateLimit("openrouter", log, inner)(OPENROUTER_URL),
+    ).resolves.toBe(refusal);
+    expect(inner).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops waiting once it has waited the allowed number of times", async () => {
+    frozenClock();
+    const inner = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => rateLimited(Date.now() + 30_000));
+
+    const pending = waitingOutRateLimit(
+      "openrouter",
+      log,
+      inner,
+    )(OPENROUTER_URL);
+    await vi.runAllTimersAsync();
+
+    expect((await pending).status).toBe(429);
+    expect(inner).toHaveBeenCalledTimes(RATE_LIMIT_WAITS + 1);
+  });
+
+  it("gives the wait up as soon as the request is aborted", async () => {
+    frozenClock();
+    const controller = new AbortController();
+    const inner = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(rateLimited(WINDOW_RESET));
+
+    const pending = waitingOutRateLimit(
+      "openrouter",
+      log,
+      inner,
+    )(OPENROUTER_URL, { signal: controller.signal });
+    const outcome = expect(pending).rejects.toBe("walked away");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    controller.abort("walked away");
+
+    await outcome;
+    expect(inner).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes every other answer through untouched", async () => {
+    const serverError = new Response("{}", {
+      status: 503,
+      headers: { "x-ratelimit-reset": String(Date.now() + 30_000) },
+    });
+    const inner = vi.fn<typeof fetch>().mockResolvedValue(serverError);
+
+    await expect(
+      waitingOutRateLimit("openrouter", log, inner)(OPENROUTER_URL),
+    ).resolves.toBe(serverError);
+    expect(inner).toHaveBeenCalledTimes(1);
   });
 });

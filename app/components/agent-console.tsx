@@ -9,7 +9,7 @@ import {
   toolLabel,
   statusLabel,
   partLabel,
-  providerLabel,
+  linkLabel,
   reasonLabel,
 } from "./transcript-labels";
 
@@ -148,8 +148,9 @@ export const AgentConsole = memo(function AgentConsole({
                 >
                   <span className="h-px flex-1 bg-[#f0e3c8]" />
                   <span className="shrink-0">
-                    {providerLabel(entry.from)} {reasonLabel(entry.reason)} —
-                    switching to {providerLabel(entry.to)}
+                    {linkLabel(entry.from, entry.fromModel)}{" "}
+                    {reasonLabel(entry.reason)} — switching to{" "}
+                    {linkLabel(entry.to, entry.toModel)}
                   </span>
                   <span className="h-px flex-1 bg-[#f0e3c8]" />
                 </div>

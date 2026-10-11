@@ -25,9 +25,9 @@ const groq = (state: HealthState): ProviderHealth => ({
   checkedAt: CHECKED_AT,
 });
 
-const cerebras = (state: HealthState): ProviderHealth => ({
-  provider: "cerebras",
-  modelId: "gpt-oss-120b",
+const openrouter = (state: HealthState): ProviderHealth => ({
+  provider: "openrouter",
+  modelId: "nvidia/nemotron-3-super-120b-a12b:free",
   state,
   reason: state === "dead" ? "auth" : null,
   checkedAt: CHECKED_AT,
@@ -46,7 +46,7 @@ describe("the status an uptime monitor alerts on", () => {
   it("is 200 while every candidate answers", async () => {
     const response = await answerWith({
       status: "ok",
-      providers: [groq("ok"), cerebras("ok")],
+      providers: [groq("ok"), openrouter("ok")],
     });
 
     expect(response.status).toBe(200);
@@ -55,7 +55,7 @@ describe("the status an uptime monitor alerts on", () => {
   it("is 503 as soon as one candidate is dead, though the rest still work", async () => {
     const response = await answerWith({
       status: "dead",
-      providers: [groq("ok"), cerebras("dead")],
+      providers: [groq("ok"), openrouter("dead")],
     });
 
     expect(response.status).toBe(503);
@@ -64,7 +64,7 @@ describe("the status an uptime monitor alerts on", () => {
   it("stays 200 when a candidate is merely undecided", async () => {
     const response = await answerWith({
       status: "unknown",
-      providers: [groq("unknown"), cerebras("ok")],
+      providers: [groq("unknown"), openrouter("ok")],
     });
 
     expect(response.status).toBe(200);
@@ -85,7 +85,7 @@ describe("the body the route answers with", () => {
   it("is the report as JSON, one entry per candidate", async () => {
     const report: ProviderHealthReport = {
       status: "dead",
-      providers: [groq("ok"), cerebras("dead")],
+      providers: [groq("ok"), openrouter("dead")],
     };
     const response = await answerWith(report);
 
@@ -101,8 +101,8 @@ describe("the body the route answers with", () => {
           checkedAt: CHECKED_AT,
         },
         {
-          provider: "cerebras",
-          modelId: "gpt-oss-120b",
+          provider: "openrouter",
+          modelId: "nvidia/nemotron-3-super-120b-a12b:free",
           state: "dead",
           reason: "auth",
           checkedAt: CHECKED_AT,

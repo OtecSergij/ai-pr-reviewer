@@ -125,7 +125,10 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
       ) : null}
 
       {meta ? (
-        <div className="hidden shrink-0 rounded-full border border-border bg-white px-2.5 py-1 font-mono text-[11px] text-muted sm:block">
+        <div
+          className="hidden max-w-[150px] shrink-0 truncate rounded-full border border-border bg-white px-2.5 py-1 font-mono text-[11px] text-muted sm:block"
+          title={meta.model}
+        >
           {meta.model}
         </div>
       ) : null}

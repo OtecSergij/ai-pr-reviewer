@@ -4,8 +4,8 @@ export const DEFAULT_APP_URL = "http://localhost:3000";
 
 const EnvSchema = z.object({
   GITHUB_PAT: z.string().min(1),
-  CEREBRAS_API_KEY: z.string().min(1),
   GROQ_API_KEY: z.string().min(1),
+  OPENROUTER_API_KEY: z.string().min(1),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
@@ -71,8 +71,8 @@ const EnvSchema = z.object({
 
 const MOCK_PLACEHOLDERS: Record<string, string> = {
   GITHUB_PAT: "mock",
-  CEREBRAS_API_KEY: "mock",
   GROQ_API_KEY: "mock",
+  OPENROUTER_API_KEY: "mock",
   GOOGLE_GENERATIVE_AI_API_KEY: "mock",
   DATABASE_URL: "postgres://mock:mock@localhost:5432/mock",
   REDIS_URL: "redis://localhost:6379",

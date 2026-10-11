@@ -1,17 +1,26 @@
 import type { ProviderName } from "@/lib/ai/provider";
 import type { FailureReason } from "@/lib/review/errors";
 
-export function providerLabel(provider: ProviderName): string {
+function providerLabel(provider: ProviderName): string {
   switch (provider) {
-    case "cerebras":
-      return "Cerebras";
     case "groq":
       return "Groq";
+    case "openrouter":
+      return "OpenRouter";
     case "google":
       return "Gemini";
     case "anthropic":
       return "Anthropic";
   }
+}
+
+const LINK_LABELS = new Map([
+  ["nvidia/nemotron-3-super-120b-a12b:free", "Nemotron"],
+  ["cohere/north-mini-code:free", "North"],
+]);
+
+export function linkLabel(provider: ProviderName, modelId?: string): string {
+  return LINK_LABELS.get(modelId ?? "") ?? providerLabel(provider);
 }
 
 const REASON_LABELS: Record<FailureReason, string> = {
