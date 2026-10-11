@@ -36,6 +36,7 @@ const {
   logRecords: [] as LogRecord[],
   reportedFailures: [] as {
     provider: string;
+    modelId: string;
     reason: string;
     status: number | null;
   }[],
@@ -106,6 +107,7 @@ vi.mock("@/lib/ai/provider-health", async (importOriginal) => {
       const [candidate, reason, error] = args;
       reportedFailures.push({
         provider: candidate.provider,
+        modelId: candidate.modelId,
         reason,
         status: (error as { statusCode?: number }).statusCode ?? null,
       });
@@ -154,6 +156,21 @@ const GEMINI_SERVER_ERROR = "Gemini had a server error.";
 const GEMINI_RATE_LIMITED = "Gemini hit rate limits. Try again in about 30s.";
 const CHAIN_FAILED = "review failed after providers exhausted";
 const DEAD_PROVIDER = "provider dead";
+
+const FREE_CHAIN = [
+  { provider: "groq", modelId: "openai/gpt-oss-120b" },
+  { provider: "openrouter", modelId: "nvidia/nemotron-3-super-120b-a12b:free" },
+  { provider: "openrouter", modelId: "cohere/north-mini-code:free" },
+  { provider: "google", modelId: "gemini-flash-latest" },
+];
+
+const hop = (index: number, reason: string) => ({
+  from: FREE_CHAIN[index].provider,
+  to: FREE_CHAIN[index + 1].provider,
+  fromModel: FREE_CHAIN[index].modelId,
+  toModel: FREE_CHAIN[index + 1].modelId,
+  reason,
+});
 
 type LoadOptions = {
   scenario?: string;
@@ -404,8 +421,9 @@ describe("a chain where every model stops on length", () => {
     const chunks = await review(runReview);
 
     expect(dataOf(chunks, "data-failover")).toEqual([
-      { from: "groq", to: "cerebras", reason: "output-truncated" },
-      { from: "cerebras", to: "google", reason: "output-truncated" },
+      hop(0, "output-truncated"),
+      hop(1, "output-truncated"),
+      hop(2, "output-truncated"),
     ]);
     expect(dataOf(chunks, "data-outcome")).toEqual([
       { incomplete: true, saveFailed: false },
@@ -418,13 +436,11 @@ describe("a chain where every model stops on length", () => {
     const { runReview } = await loadRunReview({ scenario: "finish-length" });
     const chunks = await review(runReview);
 
-    expect(transcripts).toHaveLength(3);
+    expect(transcripts).toHaveLength(FREE_CHAIN.length);
     expect(chunks.filter((chunk) => chunk.type === "error")).toEqual([]);
-    expect(dataOf(chunks, "data-meta").map((meta) => meta.model)).toEqual([
-      "openai/gpt-oss-120b",
-      "gpt-oss-120b",
-      "gemini-flash-latest",
-    ]);
+    expect(dataOf(chunks, "data-meta").map((meta) => meta.model)).toEqual(
+      FREE_CHAIN.map((link) => link.modelId),
+    );
   });
 
   it("keeps the orphaned tool result out of every successor's transcript", async () => {
@@ -496,7 +512,7 @@ describe("a chain where every model stops on length", () => {
     const { runReview } = await loadRunReview({ scenario: "finish-length" });
     await review(runReview);
 
-    for (const index of [1, 2]) {
+    for (const index of [1, 2, 3]) {
       const callIds = messagesOf(index)
         .filter((message) => message.role === "assistant")
         .flatMap((message) =>
@@ -565,10 +581,10 @@ describe("a chain where every model stops on length", () => {
     const { runReview } = await loadRunReview({ scenario: "finish-length" });
     await review(runReview);
 
-    expect(streamOptions).toHaveLength(3);
+    expect(streamOptions).toHaveLength(FREE_CHAIN.length);
     await expect(stepZeroSettings(0)).resolves.toBeUndefined();
 
-    for (const index of [1, 2]) {
+    for (const index of [1, 2, 3]) {
       await expect(stepZeroSettings(index)).resolves.toEqual({
         toolChoice: "required",
         activeTools: READING_TOOL_NAMES,
@@ -623,7 +639,7 @@ describe("a chain interrupted once every diff had been read", () => {
     });
     await review(runReview);
 
-    expect(streamOptions).toHaveLength(3);
+    expect(streamOptions).toHaveLength(FREE_CHAIN.length);
     await expect(stepZeroSettings(1)).resolves.toBeUndefined();
   });
 });
@@ -658,9 +674,7 @@ describe("a chain whose first model dies mid-stream", () => {
     const { runReview } = await loadRunReview({ error: "first-only" });
     const chunks = await review(runReview);
 
-    expect(dataOf(chunks, "data-failover")).toEqual([
-      { from: "groq", to: "cerebras", reason: "server" },
-    ]);
+    expect(dataOf(chunks, "data-failover")).toEqual([hop(0, "server")]);
     expect(dataOf(chunks, "data-outcome")).toEqual([
       { incomplete: false, saveFailed: false },
     ]);
@@ -700,8 +714,9 @@ describe("a chain every link of which is rate limited", () => {
     const chunks = await review(runReview);
 
     expect(dataOf(chunks, "data-failover")).toEqual([
-      { from: "groq", to: "cerebras", reason: "rate-limit" },
-      { from: "cerebras", to: "google", reason: "rate-limit" },
+      hop(0, "rate-limit"),
+      hop(1, "rate-limit"),
+      hop(2, "rate-limit"),
     ]);
     expect(dataOf(chunks, "data-errorKind")).toEqual([
       { kind: "provider-quota" },
@@ -718,19 +733,9 @@ describe("a chain every link of which is rate limited", () => {
     const { runReview } = await loadRunReview({ error: "api-429" });
     await review(runReview);
 
-    expect(chainFailure().attempts).toEqual([
-      {
-        provider: "groq",
-        modelId: "openai/gpt-oss-120b",
-        reason: "rate-limit",
-      },
-      { provider: "cerebras", modelId: "gpt-oss-120b", reason: "rate-limit" },
-      {
-        provider: "google",
-        modelId: "gemini-flash-latest",
-        reason: "rate-limit",
-      },
-    ]);
+    expect(chainFailure().attempts).toEqual(
+      FREE_CHAIN.map((link) => ({ ...link, reason: "rate-limit" })),
+    );
   });
 });
 
@@ -739,11 +744,9 @@ describe("a chain every link of which refuses the server key", () => {
     const { runReview } = await loadRunReview({ error: "api-402" });
     await review(runReview);
 
-    expect(reportedFailures).toEqual([
-      { provider: "groq", reason: "auth", status: 402 },
-      { provider: "cerebras", reason: "auth", status: 402 },
-      { provider: "google", reason: "auth", status: 402 },
-    ]);
+    expect(reportedFailures).toEqual(
+      FREE_CHAIN.map((link) => ({ ...link, reason: "auth", status: 402 })),
+    );
   });
 
   it("still fails over on the routine warning", async () => {
@@ -751,14 +754,15 @@ describe("a chain every link of which refuses the server key", () => {
     const chunks = await review(runReview);
 
     expect(dataOf(chunks, "data-failover")).toEqual([
-      { from: "groq", to: "cerebras", reason: "auth" },
-      { from: "cerebras", to: "google", reason: "auth" },
+      hop(0, "auth"),
+      hop(1, "auth"),
+      hop(2, "auth"),
     ]);
     expect(
       logRecords
         .filter((entry) => entry.msg === "provider failover")
         .map((entry) => entry.level),
-    ).toEqual(["warn", "warn"]);
+    ).toEqual(["warn", "warn", "warn"]);
   });
 
   it("raises no dead-provider alarm over a refusal the mock injected", async () => {
@@ -786,8 +790,9 @@ describe("a chain whose links report an abort no one asked for", () => {
     const chunks = await review(runReview);
 
     expect(dataOf(chunks, "data-failover")).toEqual([
-      { from: "groq", to: "cerebras", reason: "server" },
-      { from: "cerebras", to: "google", reason: "server" },
+      hop(0, "server"),
+      hop(1, "server"),
+      hop(2, "server"),
     ]);
     expect(dataOf(chunks, "data-errorKind")).toEqual([{ kind: "review" }]);
     expect(errorTextsIn(chunks)).toEqual([GEMINI_SERVER_ERROR]);

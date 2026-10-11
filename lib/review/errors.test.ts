@@ -867,6 +867,29 @@ describe("verdictMessage", () => {
     ).toBe("Gemini had a server error.");
   });
 
+  it("names an OpenRouter link by its model, as the console did on the way down", () => {
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "rate-limit",
+        message: BUSY,
+        provider: "openrouter",
+        modelId: "cohere/north-mini-code:free",
+      }),
+    ).toBe("North hit rate limits.");
+  });
+
+  it("falls back to the provider's name when the verdict carries no model", () => {
+    expect(
+      verdictMessage({
+        hop: true,
+        reason: "server",
+        message: BUSY,
+        provider: "openrouter",
+      }),
+    ).toBe("OpenRouter had a server error.");
+  });
+
   it("keeps only the wait that belongs to this run", () => {
     expect(
       verdictMessage({

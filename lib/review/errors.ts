@@ -4,7 +4,7 @@ import { GitHubError, type GitHubErrorCode } from "@/lib/github/error-base";
 import { isTtfbTimeout } from "@/lib/ai/provider-fetch";
 import type { ProviderName } from "@/lib/ai/provider";
 import type { ErrorKind } from "@/lib/review/transcript";
-import { providerLabel, reasonLabel } from "@/lib/review/failure-labels";
+import { linkLabel, reasonLabel } from "@/lib/review/failure-labels";
 
 const TRANSIENT_MESSAGE =
   "The review service is busy right now. Please try again in a moment.";
@@ -305,7 +305,7 @@ export function verdictMessage(verdict: FailureVerdict): string {
     verdict.provider !== undefined &&
     verdict.reason !== "key-rejected" &&
     UNNAMED_SUBJECT_MESSAGES.has(verdict.message)
-      ? `${providerLabel(verdict.provider)} ${reasonLabel(verdict.reason)}.`
+      ? `${linkLabel(verdict.provider, verdict.modelId)} ${reasonLabel(verdict.reason)}.`
       : verdict.message;
 
   if (verdict.retryAfterSec === undefined) return lead;

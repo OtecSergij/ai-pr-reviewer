@@ -61,9 +61,9 @@ describe("estimateInputTokens", () => {
     );
   });
 
-  it("reserves the declared output ceiling, because Cerebras charges it at admission", () => {
-    expect(estimateInputTokens(opening, tools, 6_000)).toBe(
-      estimateInputTokens(opening, tools) + 6_000,
+  it("reserves the declared output ceiling, because the reply has to fit in the same budget", () => {
+    expect(estimateInputTokens(opening, tools, 16_000)).toBe(
+      estimateInputTokens(opening, tools) + 16_000,
     );
   });
 
@@ -77,7 +77,7 @@ describe("estimateInputTokens", () => {
 describe("budgetCeiling", () => {
   it("keeps a fifth of the per-minute budget in reserve", () => {
     expect(budgetCeiling(8_000)).toBe(6_400);
-    expect(budgetCeiling(30_000)).toBe(24_000);
+    expect(budgetCeiling(200_000)).toBe(160_000);
     expect(budgetCeiling(250_000)).toBe(200_000);
   });
 });
@@ -87,8 +87,8 @@ describe("the opening request of a review", () => {
     expect(estimateInputTokens(opening, tools)).toBeLessThan(
       budgetCeiling(8_000),
     );
-    expect(estimateInputTokens(opening, tools, 6_000)).toBeLessThan(
-      budgetCeiling(30_000),
+    expect(estimateInputTokens(opening, tools, 16_000)).toBeLessThan(
+      budgetCeiling(200_000),
     );
     expect(estimateInputTokens(opening, tools, 24_000)).toBeLessThan(
       budgetCeiling(250_000),

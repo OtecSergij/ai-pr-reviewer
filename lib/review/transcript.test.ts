@@ -24,7 +24,9 @@ describe("revealTranscript", () => {
   const failover: TranscriptEntry = {
     kind: "failover",
     from: "groq",
-    to: "cerebras",
+    to: "openrouter",
+    fromModel: "openai/gpt-oss-120b",
+    toModel: "nvidia/nemotron-3-super-120b-a12b:free",
     reason: "rate-limit",
   };
 
@@ -254,7 +256,14 @@ describe("totalTextChars", () => {
     expect(
       totalTextChars([
         toolEntry,
-        { kind: "failover", from: "groq", to: "cerebras", reason: "server" },
+        {
+          kind: "failover",
+          from: "groq",
+          to: "openrouter",
+          fromModel: "openai/gpt-oss-120b",
+          toModel: "nvidia/nemotron-3-super-120b-a12b:free",
+          reason: "server",
+        },
       ]),
     ).toBe(0);
   });

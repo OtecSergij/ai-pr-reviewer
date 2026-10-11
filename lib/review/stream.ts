@@ -14,6 +14,8 @@ export const ISSUE_DATA_KEY = "issue" as const;
 export type FailoverData = {
   from: ProviderName;
   to: ProviderName;
+  fromModel: string;
+  toModel: string;
   reason: FailureReason;
 };
 

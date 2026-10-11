@@ -249,6 +249,8 @@ export async function runReview({
           data: {
             from: candidates[index].provider,
             to: candidates[index + 1].provider,
+            fromModel: candidates[index].modelId,
+            toModel: candidates[index + 1].modelId,
             reason,
           },
         });
@@ -297,6 +299,8 @@ export async function runReview({
               {
                 from: candidates[i].provider,
                 to: candidates[i + 1].provider,
+                fromModel: candidates[i].modelId,
+                toModel: candidates[i + 1].modelId,
                 reason: OVER_BUDGET_VERDICT.reason,
                 estimate,
                 budget,
@@ -425,6 +429,8 @@ export async function runReview({
               {
                 from: candidates[i].provider,
                 to: candidates[i + 1].provider,
+                fromModel: candidates[i].modelId,
+                toModel: candidates[i + 1].modelId,
                 reason: cut.reason,
                 finishReason,
                 steps,
@@ -535,6 +541,8 @@ export async function runReview({
               err: failure,
               from: candidates[i].provider,
               to: candidates[i + 1].provider,
+              fromModel: candidates[i].modelId,
+              toModel: candidates[i + 1].modelId,
               reason: knownError.reason,
               retryAfterSec: knownError.retryAfterSec ?? null,
             },
