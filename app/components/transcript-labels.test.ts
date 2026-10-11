@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { statusLabel } from "./transcript-labels";
+import { linkLabel, statusLabel } from "./transcript-labels";
 
 const toolStatuses = (): string[] => {
   const source = readFileSync(
@@ -35,5 +35,26 @@ describe("statusLabel covers every status the tools return", () => {
     expect(
       statuses.filter((status) => statusLabel(status).includes("_")),
     ).toEqual([]);
+  });
+});
+
+describe("linkLabel names the chain link a failover divider talks about", () => {
+  it("uses the provider's name where the provider serves one link", () => {
+    expect(linkLabel("groq", "openai/gpt-oss-120b")).toBe("Groq");
+    expect(linkLabel("google", "gemini-flash-latest")).toBe("Gemini");
+  });
+
+  it("tells the two OpenRouter links apart by their models", () => {
+    expect(
+      linkLabel("openrouter", "nvidia/nemotron-3-super-120b-a12b:free"),
+    ).toBe("Nemotron");
+    expect(linkLabel("openrouter", "cohere/north-mini-code:free")).toBe(
+      "North",
+    );
+  });
+
+  it("falls back to the provider's name for a model it has no name for", () => {
+    expect(linkLabel("openrouter", "qwen/qwen3.8-27b:free")).toBe("OpenRouter");
+    expect(linkLabel("openrouter")).toBe("OpenRouter");
   });
 });

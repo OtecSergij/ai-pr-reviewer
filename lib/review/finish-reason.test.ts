@@ -20,7 +20,13 @@ const meta: ReviewChunk = {
 const failover: ReviewChunk = {
   type: "data-failover",
   transient: true,
-  data: { from: "groq", to: "cerebras", reason: "output-truncated" },
+  data: {
+    from: "groq",
+    to: "openrouter",
+    fromModel: "openai/gpt-oss-120b",
+    toModel: "nvidia/nemotron-3-super-120b-a12b:free",
+    reason: "output-truncated",
+  },
 };
 
 const finish = (finishReason: FinishReason): ReviewChunk => ({
