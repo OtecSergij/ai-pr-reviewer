@@ -36,17 +36,17 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "^10.1.0",
-    "redis": "^5.12.1",
+    "redis": "^6.3.0",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.5.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^24.12.4",
+    "@types/node": "^26.6.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^3.2.7",
+    "@vitest/coverage-v8": "^5.0.3",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
     "eslint": "^9",
@@ -55,6 +55,6 @@
     "prettier": "3.9.9",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.7"
+    "vitest": "^5.0.3"
   }
 }
