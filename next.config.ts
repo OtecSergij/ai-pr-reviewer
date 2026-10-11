@@ -18,6 +18,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  agentRules: false,
   output: "standalone",
   outputFileTracingIncludes: {
     "/opengraph-image": ["./app/og/fonts/*.ttf"],
