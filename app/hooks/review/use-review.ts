@@ -32,7 +32,7 @@ const STALL_NOTICE_MS = 8_000;
 const STALL_ESCALATION_MS = 30_000;
 const STALL_NOTICES = [
   "Waiting on the provider — free-tier responses can take a while.",
-  "Still waiting — a rate-limited provider can pause for up to a minute before retrying.",
+  "Still waiting — a rate-limited provider can pause the review until its per-minute limit resets.",
 ] as const;
 
 export type ReviewRunOptions = {

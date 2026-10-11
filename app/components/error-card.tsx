@@ -56,8 +56,9 @@ const HINTS: Partial<Record<ErrorKind, ReactNode>> = {
   ),
   "provider-quota": (
     <p className="mt-2 max-w-[540px] text-[13px] leading-[1.6] text-faint [text-wrap:pretty]">
-      The free model chain runs on shared per-minute quotas, so every model can
-      be out of budget at once. A retry a minute later usually goes through.
+      The free model chain runs on shared per-minute and per-day quotas, so
+      every model can be out of budget at once. A retry a minute later may go
+      through; a spent daily quota takes longer to come back.
     </p>
   ),
   "api-key": (
