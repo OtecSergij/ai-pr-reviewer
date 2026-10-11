@@ -89,9 +89,9 @@ const EXPECTED_STATE: Record<FailureReason, HealthState> = {
 };
 
 const groq = vi.fn<Provider>();
-const cerebras = vi.fn<Provider>();
+const openrouter = vi.fn<Provider>();
 const google = vi.fn<Provider>();
-const providers = [groq, cerebras, google];
+const providers = [groq, openrouter, google];
 
 const candidate = (
   provider: ProviderName,
@@ -108,7 +108,11 @@ const candidate = (
 });
 
 const GROQ = candidate("groq", "openai/gpt-oss-120b", groq);
-const CEREBRAS = candidate("cerebras", "gpt-oss-120b", cerebras);
+const OPENROUTER = candidate(
+  "openrouter",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  openrouter,
+);
 const GOOGLE = candidate("google", "gemini-2.5-flash", google);
 
 const answered = (finish: "stop" | "length" = "stop"): Answer => ({
@@ -179,7 +183,7 @@ beforeEach(() => {
   envMock.MOCK_REVIEW = false;
   logRecords.length = 0;
   selectModelsMock.mockReset();
-  selectModelsMock.mockReturnValue([GROQ, CEREBRAS, GOOGLE]);
+  selectModelsMock.mockReturnValue([GROQ, OPENROUTER, GOOGLE]);
   for (const provider of providers) {
     provider.mockReset();
     provider.mockImplementation(async () => answered());
@@ -218,8 +222,8 @@ describe("a probe round over a chain that answers", () => {
           checkedAt: CHECKED_AT_START,
         },
         {
-          provider: "cerebras",
-          modelId: "gpt-oss-120b",
+          provider: "openrouter",
+          modelId: "nvidia/nemotron-3-super-120b-a12b:free",
           state: "ok",
           reason: null,
           checkedAt: CHECKED_AT_START,
@@ -274,7 +278,7 @@ describe("a probe round over a chain that answers", () => {
 
 describe("a probe a provider refuses", () => {
   it.each([401, 402, 403])("reads a %i as a dead key", async (status) => {
-    cerebras.mockRejectedValue(apiError(status));
+    openrouter.mockRejectedValue(apiError(status));
     const { checkProviderHealth } = await loadHealth();
     const report = await checkProviderHealth();
 
@@ -302,7 +306,7 @@ describe("a probe a provider refuses", () => {
   it("logs each dead candidate at error with the failure that proved it", async () => {
     const paymentRequired = apiError(402);
     const permissionDenied = apiError(403);
-    cerebras.mockRejectedValue(paymentRequired);
+    openrouter.mockRejectedValue(paymentRequired);
     google.mockRejectedValue(permissionDenied);
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
@@ -312,8 +316,8 @@ describe("a probe a provider refuses", () => {
         level: "error",
         msg: DEAD_MESSAGE,
         data: {
-          provider: "cerebras",
-          modelId: "gpt-oss-120b",
+          provider: "openrouter",
+          modelId: "nvidia/nemotron-3-super-120b-a12b:free",
           reason: "auth",
           err: paymentRequired,
           source: "probe",
@@ -554,7 +558,7 @@ describe("a probe that proves nothing", () => {
 
   it("raises no dead-provider alarm", async () => {
     groq.mockRejectedValue(apiError(503, { isRetryable: true }));
-    cerebras.mockRejectedValue(new TypeError("fetch failed"));
+    openrouter.mockRejectedValue(new TypeError("fetch failed"));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -563,7 +567,7 @@ describe("a probe that proves nothing", () => {
 
   it("does not hide a dead candidate behind an undecided one", async () => {
     groq.mockRejectedValue(apiError(503, { isRetryable: true }));
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth } = await loadHealth();
 
     await expect(checkProviderHealth()).resolves.toMatchObject({
@@ -606,7 +610,7 @@ describe("the verdicts the check remembers", () => {
   });
 
   it("keeps a dead verdict for fifteen minutes without probing or logging it again", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -619,7 +623,7 @@ describe("the verdicts the check remembers", () => {
   });
 
   it("asks a dead candidate again at the fifteen-minute mark, and it alone", async () => {
-    cerebras.mockRejectedValueOnce(apiError(402));
+    openrouter.mockRejectedValueOnce(apiError(402));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -629,8 +633,8 @@ describe("the verdicts the check remembers", () => {
     expect(probeCounts()).toEqual([1, 2, 1]);
     expect(report.status).toBe("ok");
     expect(report.providers[1]).toEqual({
-      provider: "cerebras",
-      modelId: "gpt-oss-120b",
+      provider: "openrouter",
+      modelId: "nvidia/nemotron-3-super-120b-a12b:free",
       state: "ok",
       reason: null,
       checkedAt: "2026-10-03T12:15:00.000Z",
@@ -638,7 +642,7 @@ describe("the verdicts the check remembers", () => {
   });
 
   it("gives a confirmed dead verdict a fresh fifteen minutes", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -699,7 +703,7 @@ describe("the verdicts the check remembers", () => {
 
 describe("the provider dead line", () => {
   it("is not repeated while probes keep confirming the verdict", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -717,17 +721,17 @@ describe("the provider dead line", () => {
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     vi.setSystemTime(NOW + OK_TTL_MS);
     await checkProviderHealth();
 
     expect(deadLogs().map((entry) => entry.data.provider)).toEqual([
-      "cerebras",
+      "openrouter",
     ]);
   });
 
   it("is logged when an undecided candidate turns out dead", async () => {
-    cerebras
+    openrouter
       .mockRejectedValueOnce(apiError(503))
       .mockRejectedValueOnce(apiError(402));
     const { checkProviderHealth } = await loadHealth();
@@ -741,7 +745,7 @@ describe("the provider dead line", () => {
   });
 
   it("is logged again when the candidate dies after an undecided round", async () => {
-    cerebras
+    openrouter
       .mockRejectedValueOnce(apiError(402))
       .mockRejectedValueOnce(apiError(503))
       .mockRejectedValueOnce(apiError(402));
@@ -759,7 +763,7 @@ describe("the provider dead line", () => {
   });
 
   it("is logged afresh by a process that has just started", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     await (await loadHealth()).checkProviderHealth();
     await (await loadHealth()).checkProviderHealth();
 
@@ -769,7 +773,7 @@ describe("the provider dead line", () => {
 
 describe("the provider recovered line", () => {
   it("is logged once, at info, when a dead candidate answers a probe again", async () => {
-    cerebras.mockRejectedValueOnce(apiError(402));
+    openrouter.mockRejectedValueOnce(apiError(402));
     const { checkProviderHealth } = await loadHealth();
     await checkProviderHealth();
 
@@ -782,14 +786,17 @@ describe("the provider recovered line", () => {
       {
         level: "info",
         msg: RECOVERED_MESSAGE,
-        data: { provider: "cerebras", modelId: "gpt-oss-120b" },
+        data: {
+          provider: "openrouter",
+          modelId: "nvidia/nemotron-3-super-120b-a12b:free",
+        },
       },
     ]);
     expect(deadLogs()).toHaveLength(1);
   });
 
   it("counts a throttled answer as answering again", async () => {
-    cerebras
+    openrouter
       .mockRejectedValueOnce(apiError(402))
       .mockRejectedValueOnce(apiError(429));
     const { checkProviderHealth } = await loadHealth();
@@ -808,18 +815,18 @@ describe("the provider recovered line", () => {
   it("follows a dead mark a review left, too", async () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log } = reviewLogger();
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     vi.setSystemTime(NOW + DEAD_TTL_MS);
     await checkProviderHealth();
 
     expect(recoveredLogs().map((entry) => entry.data.provider)).toEqual([
-      "cerebras",
+      "openrouter",
     ]);
   });
 
   it("is not logged for a dead candidate that merely goes quiet", async () => {
-    cerebras
+    openrouter
       .mockRejectedValueOnce(apiError(402))
       .mockRejectedValueOnce(apiError(503));
     const { checkProviderHealth } = await loadHealth();
@@ -833,7 +840,7 @@ describe("the provider recovered line", () => {
   });
 
   it("is not logged when the answer comes only after an undecided round", async () => {
-    cerebras
+    openrouter
       .mockRejectedValueOnce(apiError(402))
       .mockRejectedValueOnce(apiError(503));
     const { checkProviderHealth } = await loadHealth();
@@ -896,13 +903,13 @@ describe("a server key refused in the middle of a review", () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log } = reviewLogger();
 
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
     const report = await checkProviderHealth();
 
     expect(report.status).toBe("dead");
     expect(report.providers[1]).toEqual({
-      provider: "cerebras",
-      modelId: "gpt-oss-120b",
+      provider: "openrouter",
+      modelId: "nvidia/nemotron-3-super-120b-a12b:free",
       state: "dead",
       reason: "auth",
       checkedAt: CHECKED_AT_START,
@@ -928,13 +935,13 @@ describe("a server key refused in the middle of a review", () => {
     const { log, errors } = reviewLogger();
     const paymentRequired = apiError(402);
 
-    recordProviderFailure(CEREBRAS, "auth", paymentRequired, log);
+    recordProviderFailure(OPENROUTER, "auth", paymentRequired, log);
 
     expect(errors).toEqual([
       [
         {
-          provider: "cerebras",
-          modelId: "gpt-oss-120b",
+          provider: "openrouter",
+          modelId: "nvidia/nemotron-3-super-120b-a12b:free",
           reason: "auth",
           err: paymentRequired,
           source: "review",
@@ -965,12 +972,12 @@ describe("a server key refused in the middle of a review", () => {
   });
 
   it("logs a candidate that was merely undecided before", async () => {
-    cerebras.mockRejectedValueOnce(apiError(503));
+    openrouter.mockRejectedValueOnce(apiError(503));
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
     await checkProviderHealth();
 
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     expect(errors).toHaveLength(1);
   });
@@ -979,9 +986,9 @@ describe("a server key refused in the middle of a review", () => {
     const { recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
 
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
-    recordProviderFailure(CEREBRAS, "unavailable", apiError(404), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "unavailable", apiError(404), log);
 
     expect(errors).toHaveLength(1);
   });
@@ -989,10 +996,10 @@ describe("a server key refused in the middle of a review", () => {
   it("still restarts the fifteen minutes on each of those reviews", async () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log } = reviewLogger();
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     vi.setSystemTime(NOW + 5 * MINUTE_MS);
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     vi.setSystemTime(NOW + 5 * MINUTE_MS + DEAD_TTL_MS - 1);
     const report = await checkProviderHealth();
@@ -1001,33 +1008,33 @@ describe("a server key refused in the middle of a review", () => {
       state: "dead",
       checkedAt: "2026-10-03T12:05:00.000Z",
     });
-    expect(cerebras).not.toHaveBeenCalled();
+    expect(openrouter).not.toHaveBeenCalled();
   });
 
   it("stays silent about a candidate a probe had already found dead", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
     await checkProviderHealth();
 
     vi.setSystemTime(NOW + DEAD_TTL_MS + MINUTE_MS);
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     expect(errors).toEqual([]);
     expect(deadLogs()).toHaveLength(1);
   });
 
   it("is confirmed by the next probe without a second line", async () => {
-    cerebras.mockRejectedValue(apiError(402));
+    openrouter.mockRejectedValue(apiError(402));
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     vi.setSystemTime(NOW + DEAD_TTL_MS);
     const report = await checkProviderHealth();
 
     expect(report.providers[1].state).toBe("dead");
-    expect(cerebras).toHaveBeenCalledTimes(1);
+    expect(openrouter).toHaveBeenCalledTimes(1);
     expect(errors).toHaveLength(1);
     expect(deadLogs()).toEqual([]);
   });
@@ -1035,11 +1042,11 @@ describe("a server key refused in the middle of a review", () => {
   it("logs again when the candidate recovers and is then refused once more", async () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     vi.setSystemTime(NOW + DEAD_TTL_MS);
     await checkProviderHealth();
-    recordProviderFailure(CEREBRAS, "auth", apiError(402), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(402), log);
 
     expect(recoveredLogs()).toHaveLength(1);
     expect(errors).toHaveLength(2);
@@ -1076,7 +1083,7 @@ describe("a review failure the health cache ignores", () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
 
-    recordProviderFailure(CEREBRAS, reason, apiError(500), log);
+    recordProviderFailure(OPENROUTER, reason, apiError(500), log);
     const report = await checkProviderHealth();
 
     expect(errors).toEqual([]);
@@ -1090,7 +1097,7 @@ describe("a review failure the health cache ignores", () => {
       const { checkProviderHealth, recordProviderFailure } = await loadHealth();
       const { log, errors } = reviewLogger();
 
-      recordProviderFailure(CEREBRAS, "unknown", apiError(status), log);
+      recordProviderFailure(OPENROUTER, "unknown", apiError(status), log);
       const report = await checkProviderHealth();
 
       expect(errors).toEqual([]);
@@ -1102,7 +1109,12 @@ describe("a review failure the health cache ignores", () => {
   it("ignores a refusal of the caller's own key", async () => {
     const { checkProviderHealth, recordProviderFailure } = await loadHealth();
     const { log, errors } = reviewLogger();
-    const ownKey = candidate("cerebras", "gpt-oss-120b", cerebras, true);
+    const ownKey = candidate(
+      "openrouter",
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      openrouter,
+      true,
+    );
 
     recordProviderFailure(ownKey, "unavailable", apiError(404), log);
     const report = await checkProviderHealth();
@@ -1117,7 +1129,7 @@ describe("a review failure the health cache ignores", () => {
     const { log, errors } = reviewLogger();
 
     envMock.MOCK_REVIEW = true;
-    recordProviderFailure(CEREBRAS, "auth", apiError(401), log);
+    recordProviderFailure(OPENROUTER, "auth", apiError(401), log);
     envMock.MOCK_REVIEW = false;
     const report = await checkProviderHealth();
 

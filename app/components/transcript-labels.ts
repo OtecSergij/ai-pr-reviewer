@@ -1,7 +1,7 @@
 import { REVIEW_TOOL_NAMES } from "@/lib/review/tools/tool-names";
 import type { PatchPart } from "@/lib/review/transcript";
 
-export { providerLabel, reasonLabel } from "@/lib/review/failure-labels";
+export { linkLabel, reasonLabel } from "@/lib/review/failure-labels";
 
 export function toolLabel(
   toolName: string,

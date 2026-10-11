@@ -1,7 +1,7 @@
 import "server-only";
-import { createCerebras } from "@ai-sdk/cerebras";
 import { createGroq } from "@ai-sdk/groq";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import {
   defaultSettingsMiddleware,
@@ -10,9 +10,9 @@ import {
 } from "ai";
 import type { Logger } from "pino";
 import { env } from "@/lib/env";
-import { tracedFetch } from "@/lib/ai/provider-fetch";
+import { tracedFetch, waitingOutRateLimit } from "@/lib/ai/provider-fetch";
 
-export type ProviderName = "cerebras" | "groq" | "google" | "anthropic";
+export type ProviderName = "groq" | "openrouter" | "google" | "anthropic";
 
 export type ModelCandidate = {
   model: LanguageModel;
@@ -64,13 +64,19 @@ function userKeyChain(anthropicKey: string, log: Logger): ModelCandidate[] {
 }
 
 function serverKeyChain(log: Logger): ModelCandidate[] {
-  const cerebras = createCerebras({
-    apiKey: env.CEREBRAS_API_KEY,
-    fetch: tracedFetch("cerebras", log),
-  });
   const groq = createGroq({
     apiKey: env.GROQ_API_KEY,
     fetch: tracedFetch("groq", log),
+  });
+  const openrouter = createOpenAICompatible({
+    name: "openrouter",
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: env.OPENROUTER_API_KEY,
+    fetch: waitingOutRateLimit(
+      "openrouter",
+      log,
+      tracedFetch("openrouter", log),
+    ),
   });
   const google = createGoogleGenerativeAI({
     apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
@@ -88,13 +94,23 @@ function serverKeyChain(log: Logger): ModelCandidate[] {
       maxRetries: 0,
     },
     {
-      model: cerebras("gpt-oss-120b"),
-      provider: "cerebras",
-      modelId: "gpt-oss-120b",
+      model: openrouter("nvidia/nemotron-3-super-120b-a12b:free"),
+      provider: "openrouter",
+      modelId: "nvidia/nemotron-3-super-120b-a12b:free",
       usesUserKey: false,
-      contextWindow: 65_536,
-      tpmBudget: 30_000,
-      maxOutputTokens: 6_000,
+      contextWindow: 262_144,
+      tpmBudget: 200_000,
+      maxOutputTokens: 16_000,
+      maxRetries: 0,
+    },
+    {
+      model: openrouter("cohere/north-mini-code:free"),
+      provider: "openrouter",
+      modelId: "cohere/north-mini-code:free",
+      usesUserKey: false,
+      contextWindow: 256_000,
+      tpmBudget: 200_000,
+      maxOutputTokens: 16_000,
       maxRetries: 0,
     },
     {
