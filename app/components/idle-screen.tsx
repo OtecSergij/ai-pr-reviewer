@@ -149,8 +149,9 @@ export function IdleScreen({
                   role="tooltip"
                   className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-[250px] -translate-x-1/2 rounded-lg bg-ink px-3 py-2 text-[11.5px] font-normal leading-[1.5] text-white opacity-0 shadow-[0_4px_12px_rgba(24,24,27,0.2)] transition-opacity duration-100 group-focus-within:opacity-100 group-hover:opacity-100"
                 >
-                  Free reviews run on lightweight models with a tight context
-                  window — Sonnet reads deeper and covers more of the diff.
+                  Free reviews run on a chain of lightweight models that share
+                  tight rate limits — Sonnet reads deeper and carries the whole
+                  review itself.
                 </span>
               </span>
             </div>
